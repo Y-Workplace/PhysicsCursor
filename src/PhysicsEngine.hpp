@@ -37,13 +37,13 @@ struct TrailPoint {
 
 class PhysicsEngine {
 public:
-    // --- Parâmetros Físicos Orgânicos, Lentos e Suaves ---
+    // --- Parâmetros Físicos Orgânicos e Calibrados ---
     float mass = 1.0f;
-    float springK = 65.0f;             // Mola macia para balanço lento e orgânico (oscilação relaxada)
-    float damping = 6.2f;              // Amortecimento reduzido para permitir balanço fluido e overshoot suave
-    float velocityInfluence = 0.0010f; // Entrada de velocidade progressiva (sem arrasto repentino)
-    float inertiaInfluence = 0.00018f; // Força inercial suave proporcional à aceleração
-    float maxDeflectionDeg = 36.0f;    // Deflexão máxima em graus
+    float springK = 140.0f;            // Mola restauradora suave
+    float damping = 24.0f;             // Amortecimento viscoso
+    float velocityInfluence = 0.0014f; // Sensibilidade ao arrasto horizontal
+    float inertiaInfluence = 0.00030f; // Força inercial proporcional à aceleração
+    float maxDeflectionDeg = 38.0f;    // Deflexão máxima natural em graus
 
     // Estado do Pivô (Ponto de Evento do Cursor no pixel exato)
     Vector2D pivotPos{640.0f, 360.0f};
@@ -64,7 +64,7 @@ public:
 
     // Rastro
     std::deque<TrailPoint> trail;
-    static constexpr size_t MAX_TRAIL_POINTS = 24;
+    static constexpr size_t MAX_TRAIL_POINTS = 20;
 
 private:
     Vector2D lastPivotPos{640.0f, 360.0f};
@@ -78,11 +78,11 @@ public:
 
     void resetToDefault() {
         mass = 1.0f;
-        springK = 65.0f;
-        damping = 6.2f;
-        velocityInfluence = 0.0010f;
-        inertiaInfluence = 0.00018f;
-        maxDeflectionDeg = 36.0f;
+        springK = 140.0f;
+        damping = 24.0f;
+        velocityInfluence = 0.0014f;
+        inertiaInfluence = 0.00030f;
+        maxDeflectionDeg = 38.0f;
 
         angle = 0.0f;
         angularVelocity = 0.0f;
@@ -98,7 +98,7 @@ public:
     }
 
     void applyAngularImpulse(float impulse) {
-        angularVelocity += impulse * 0.10f;
+        angularVelocity += impulse * 0.12f;
     }
 
     void update(float dt) {
@@ -112,51 +112,44 @@ public:
             return;
         }
 
-        // 1. Cinemática Linear com Filtro de Velocidade Mais Suave e Progressivo
+        // 1. Cinemática Linear com Filtro de Tempo Contínuo Suave
         Vector2D rawVel = (pivotPos - lastPivotPos) / dt;
         lastPivotPos = pivotPos;
 
-        // velDecay mais suave (~13 Hz em vez de 24 Hz) evita picos bruscos ao iniciar o movimento
-        float velDecay = std::exp(-13.0f * dt);
+        float velDecay = std::exp(-24.0f * dt);
         velocity = velocity * velDecay + rawVel * (1.0f - velDecay);
 
         Vector2D rawAccel = (velocity - lastFilteredVel) / dt;
         lastFilteredVel = velocity;
 
-        // accelDecay mais suave (~11 Hz) filtra acelerações repentinas
-        float accelDecay = std::exp(-11.0f * dt);
+        float accelDecay = std::exp(-20.0f * dt);
         acceleration = acceleration * accelDecay + rawAccel * (1.0f - accelDecay);
 
-        // 2. Torques Físicos Suavizados com Curva Assimptótica
-        float maxRad = maxDeflectionDeg * (float)(M_PI / 180.0);
+        // 2. Torques Físicos
+        dragTorque = velocity.x * velocityInfluence * springK;
+        inertiaTorque = -acceleration.x * inertiaInfluence * springK * mass;
 
-        // Curva suave tanh: pequenos movimentos dão toque sutil, movimentos rápidos não dão tranco
-        float softVelFactor = std::tanh(velocity.x * velocityInfluence);
-        dragTorque = softVelFactor * maxRad * springK * 0.85f;
+        float diagonalComp = (velocity.x - velocity.y * 0.30f) * (velocityInfluence * 0.35f * springK);
+        float externalTorque = dragTorque * 0.75f + diagonalComp * 0.25f + inertiaTorque;
 
-        float softAccelFactor = std::tanh(acceleration.x * inertiaInfluence);
-        inertiaTorque = -softAccelFactor * maxRad * springK * 0.35f;
+        // 3. Retorno ao Repouso Ultra-Natural e Orgânico
+        float absAngle = std::abs(angle);
+        springTorque = -springK * angle * (1.0f + 0.4f * absAngle);
 
-        // Leve inclinação ao mover em diagonal
-        float softVelY = std::tanh(velocity.y * velocityInfluence * 0.4f);
-        float diagonalComp = -softVelY * (velocity.x >= 0 ? 0.12f : -0.12f) * maxRad * springK;
+        float speed = velocity.length();
+        float restBlend = std::clamp(1.0f - (speed / 120.0f), 0.0f, 1.0f);
+        float effectiveDamping = damping * (1.0f + 0.8f * restBlend);
 
-        float externalTorque = dragTorque + inertiaTorque + diagonalComp;
-
-        // 3. Mola Torsional e Amortecimento Suave Reduzido
-        // A mola restauradora com k menor garante um balanço mais lento e majestoso
-        springTorque = -springK * angle;
-
-        // Amortecimento suave: permite que o cursor balance organicamente sem frear de forma seca
-        dampingTorque = -damping * angularVelocity;
+        dampingTorque = -effectiveDamping * angularVelocity;
         totalTorque = externalTorque + springTorque + dampingTorque;
 
         float I = mass * 1.0f;
         angularAccel = totalTorque / I;
 
-        // 4. Integração Numérica (Semi-Implicit Euler com Sub-stepping)
+        // 4. Integração Numérica com Sub-stepping
         const int subSteps = 4;
         float subDt = dt / (float)subSteps;
+        float maxRad = maxDeflectionDeg * (float)(M_PI / 180.0);
 
         for (int i = 0; i < subSteps; ++i) {
             angularVelocity += angularAccel * subDt;
@@ -164,24 +157,20 @@ public:
 
             if (angle > maxRad) {
                 angle = maxRad;
-                if (angularVelocity > 0.0f) angularVelocity *= 0.3f;
+                if (angularVelocity > 0.0f) angularVelocity *= 0.2f;
             } else if (angle < -maxRad) {
                 angle = -maxRad;
-                if (angularVelocity < 0.0f) angularVelocity *= 0.3f;
+                if (angularVelocity < 0.0f) angularVelocity *= 0.2f;
             }
         }
 
-        float speed = velocity.length();
-        float absAngle = std::abs(angle);
-
-        // Zera repouso com transição imperceptível apenas quando estiver quase 100% imóvel
-        if (speed < 3.0f && absAngle < 0.003f && std::abs(angularVelocity) < 0.03f) {
-            angle *= 0.90f;
-            angularVelocity *= 0.90f;
+        if (speed < 5.0f && absAngle < 0.005f && std::abs(angularVelocity) < 0.05f) {
+            angle *= 0.85f;
+            angularVelocity *= 0.85f;
         }
 
-        // 5. Rastro Suave
-        if (speed > 30.0f || std::abs(angularVelocity) > 0.3f) {
+        // 5. Rastro
+        if (speed > 40.0f || std::abs(angularVelocity) > 0.4f) {
             trail.push_front({pivotPos, angle, 1.0f});
             if (trail.size() > MAX_TRAIL_POINTS) {
                 trail.pop_back();
@@ -189,7 +178,7 @@ public:
         }
 
         for (auto& p : trail) {
-            p.alpha -= dt * 3.8f;
+            p.alpha -= dt * 4.5f;
             if (p.alpha < 0.0f) p.alpha = 0.0f;
         }
 

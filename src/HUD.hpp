@@ -156,18 +156,18 @@ public:
 
         ss.str("");
         if (isPT) {
-            ss << "[3/4] Rigidez da Mola (k): " << std::fixed << std::setprecision(1) << physics.springK;
+            ss << "[3/4] Rigidez da Mola (k): " << physics.springK;
         } else {
-            ss << "[3/4] Spring Stiffness (k): " << std::fixed << std::setprecision(1) << physics.springK;
+            ss << "[3/4] Spring Stiffness (k): " << physics.springK;
         }
         EmbeddedFont::drawString(renderer, ss.str(), x, y, scale, {230, 240, 255, 255});
         y += 13.0f;
 
         ss.str("");
         if (isPT) {
-            ss << "[5/6] Amortecimento (gamma): " << std::fixed << std::setprecision(1) << physics.damping << " (Suavidade)";
+            ss << "[5/6] Amortecimento (gamma): " << physics.damping << " (Suavidade)";
         } else {
-            ss << "[5/6] Damping (gamma): " << std::fixed << std::setprecision(1) << physics.damping << " (Smoothness)";
+            ss << "[5/6] Damping (gamma): " << physics.damping << " (Smoothness)";
         }
         EmbeddedFont::drawString(renderer, ss.str(), x, y, scale, {230, 240, 255, 255});
         y += 13.0f;
