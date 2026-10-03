@@ -1,0 +1,22 @@
+# Objetos e temporários de compilação
+*.o
+*.a
+*.so
+!bin/*.so
+*.log
+
+# Diretórios de build intermediários
+plugin/out/
+out/
+build/
+.cache/
+
+# Executáveis gerados localmente (mantendo os de bin/)
+/physics_cursor
+!bin/physics_cursor
+
+# VSCode / IDEs
+.vscode/
+.idea/
+*.swp
+*~
