@@ -4,17 +4,65 @@
 #include <thread>
 #include "PhysicsEngine.hpp"
 #include "CursorRenderer.hpp"
+#include "SystemCursorLoader.hpp"
+#include "BridgeServer.hpp"
 #include "HUD.hpp"
 
 int main(int argc, char* argv[]) {
     std::cout << "[PhysicsCursor] Iniciando aplicacao de fisica de cursor no CachyOS/Wayland..." << std::endl;
 
+    bool isDaemonMode = false;
     bool startInOverlay = false;
+    bool forceVector = false;
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--overlay" || arg == "-o") {
+        if (arg == "--daemon" || arg == "-d") {
+            isDaemonMode = true;
+        } else if (arg == "--overlay" || arg == "-o") {
             startInOverlay = true;
+        } else if (arg == "--vector") {
+            forceVector = true;
         }
+    }
+
+    BridgeServer bridgeServer;
+    bool bridgeActive = bridgeServer.init();
+    if (bridgeActive) {
+        std::cout << "[PhysicsCursor] Ponte IPC ativada! O plugin do Hyprland recebera a fisica em tempo real." << std::endl;
+    }
+
+    PhysicsEngine physics;
+
+    if (isDaemonMode) {
+        std::cout << "[PhysicsCursor] Rodando em MODO DAEMON ISOLADO (seguranca maxima)..." << std::endl;
+        std::cout << "  Calculando fisica em processo separado e transmitindo para o cursor do Hyprland." << std::endl;
+        std::cout << "  Pressione Ctrl+C para encerrar." << std::endl;
+
+        auto lastTime = std::chrono::high_resolution_clock::now();
+        float lastX = 0.0f, lastY = 0.0f;
+
+        while (true) {
+            auto now = std::chrono::high_resolution_clock::now();
+            float dt = std::chrono::duration<float>(now - lastTime).count();
+            if (dt <= 0.0001f || dt > 0.1f) dt = 1.0f / 120.0f;
+            lastTime = now;
+
+            float x = 0.0f, y = 0.0f;
+            if (bridgeServer.getHyprlandPointerPos(x, y)) {
+                if (x != lastX || y != lastY) {
+                    physics.setPivotPosition(x, y);
+                    lastX = x;
+                    lastY = y;
+                }
+            }
+
+            physics.update(dt);
+            bridgeServer.publish(physics.angle);
+
+            std::this_thread::sleep_for(std::chrono::microseconds(8000));
+        }
+        return 0;
     }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -22,16 +70,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "[PhysicsCursor] Driver de video ativo: " << SDL_GetCurrentVideoDriver() << std::endl;
-
     int windowWidth = 1280;
     int windowHeight = 720;
     bool isOverlayMode = startInOverlay;
 
-    // Criação da janela SDL3 com suporte a transparência e alta taxa de atualização
-    SDL_WindowFlags winFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    SDL_WindowFlags winFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_TRANSPARENT;
     if (isOverlayMode) {
-        winFlags |= SDL_WINDOW_FULLSCREEN;
+        winFlags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
     }
 
     SDL_Window* window = SDL_CreateWindow("Fisica de Cursor - CachyOS (Pivo no Ponto de Evento)", 
@@ -43,7 +88,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Criação do renderizador com suporte a VSync
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!renderer) {
         std::cerr << "Erro ao criar renderizador SDL3: " << SDL_GetError() << std::endl;
@@ -52,14 +96,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Configura o cursor nativo do sistema como invisível para que apenas o cursor físico apareça
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_HideCursor();
 
-    PhysicsEngine physics;
     CursorRenderer cursorRend;
     HUD hud;
 
-    // Centraliza o cursor inicialmente
+    SystemCursorData sysCursorData = SystemCursorLoader::loadSystemCursor(renderer);
+    cursorRend.sysCursor = sysCursorData;
+    cursorRend.useSystemCursor = sysCursorData.valid && !forceVector;
+    cursorRend.cursorScale = 1.0f;
+
     physics.setPivotPosition(windowWidth * 0.5f, windowHeight * 0.5f);
 
     uint64_t perfFreq = SDL_GetPerformanceFrequency();
@@ -68,8 +115,7 @@ int main(int argc, char* argv[]) {
     bool running = true;
     bool isLeftMouseDown = false;
 
-    std::cout << "[PhysicsCursor] Pronto! Mova o mouse para experimentar a inercia e o balanco angular." << std::endl;
-    std::cout << "[PhysicsCursor] O pivo permanece travado no primeiro pixel (ponto de evento do cursor)." << std::endl;
+    std::cout << "[PhysicsCursor] Simulacao pronta e ativa com Ponte IPC ligada!" << std::endl;
 
     while (running) {
         SDL_Event event;
@@ -80,15 +126,13 @@ int main(int argc, char* argv[]) {
                     break;
 
                 case SDL_EVENT_MOUSE_MOTION:
-                    // Atualiza a posição exata do pivô com precisão de float (subpixel)
                     physics.setPivotPosition(event.motion.x, event.motion.y);
                     break;
 
                 case SDL_EVENT_MOUSE_BUTTON_DOWN:
                     if (event.button.button == SDL_BUTTON_LEFT) {
                         isLeftMouseDown = true;
-                        // Ao clicar, o pivô recebe um pequeno pulso inercial tátil
-                        physics.applyAngularImpulse(22.0f);
+                        physics.applyAngularImpulse(18.0f);
                     }
                     break;
 
@@ -102,24 +146,24 @@ int main(int argc, char* argv[]) {
                     SDL_Keycode key = event.key.key;
                     if (key == SDLK_ESCAPE || key == SDLK_Q) {
                         running = false;
+                    } else if (key == SDLK_C) {
+                        cursorRend.useSystemCursor = !cursorRend.useSystemCursor;
                     } else if (key == SDLK_1) {
-                        physics.mass = std::max(0.2f, physics.mass - 0.2f);
+                        physics.velocityInfluence = std::max(0.0002f, physics.velocityInfluence - 0.0002f);
                     } else if (key == SDLK_2) {
-                        physics.mass = std::min(8.0f, physics.mass + 0.2f);
+                        physics.velocityInfluence = std::min(0.010f, physics.velocityInfluence + 0.0002f);
                     } else if (key == SDLK_3) {
-                        physics.springK = std::max(20.0f, physics.springK - 50.0f);
+                        physics.springK = std::max(20.0f, physics.springK - 15.0f);
                     } else if (key == SDLK_4) {
-                        physics.springK = std::min(2000.0f, physics.springK + 50.0f);
+                        physics.springK = std::min(600.0f, physics.springK + 15.0f);
                     } else if (key == SDLK_5) {
-                        physics.damping = std::max(1.0f, physics.damping - 2.0f);
+                        physics.damping = std::max(2.0f, physics.damping - 2.0f);
                     } else if (key == SDLK_6) {
                         physics.damping = std::min(80.0f, physics.damping + 2.0f);
                     } else if (key == SDLK_7) {
-                        physics.airDrag = std::max(0.0001f, physics.airDrag - 0.0005f);
+                        physics.inertiaInfluence = std::max(0.00005f, physics.inertiaInfluence - 0.00008f);
                     } else if (key == SDLK_8) {
-                        physics.airDrag = std::min(0.02f, physics.airDrag + 0.0005f);
-                    } else if (key == SDLK_G) {
-                        physics.gravityY = (physics.gravityY > 0.0f) ? 0.0f : 9.8f * 15.0f;
+                        physics.inertiaInfluence = std::min(0.002f, physics.inertiaInfluence + 0.00008f);
                     } else if (key == SDLK_V) {
                         cursorRend.showPhysicsVectors = !cursorRend.showPhysicsVectors;
                     } else if (key == SDLK_P) {
@@ -129,16 +173,14 @@ int main(int argc, char* argv[]) {
                     } else if (key == SDLK_H) {
                         hud.visible = !hud.visible;
                     } else if (key == SDLK_SPACE) {
-                        // Aplica impulso angular de teste
-                        physics.applyAngularImpulse(45.0f);
+                        physics.applyAngularImpulse(30.0f);
                     } else if (key == SDLK_R) {
                         physics.resetToDefault();
                     } else if (key == SDLK_EQUALS || key == SDLK_PLUS) {
-                        cursorRend.cursorScale = std::min(4.0f, cursorRend.cursorScale + 0.2f);
+                        cursorRend.cursorScale = std::min(3.5f, cursorRend.cursorScale + 0.2f);
                     } else if (key == SDLK_MINUS) {
-                        cursorRend.cursorScale = std::max(0.6f, cursorRend.cursorScale - 0.2f);
+                        cursorRend.cursorScale = std::max(0.5f, cursorRend.cursorScale - 0.2f);
                     } else if (key == SDLK_F11 || key == SDLK_O) {
-                        // Alternar entre modo janela e tela cheia / overlay
                         isOverlayMode = !isOverlayMode;
                         SDL_SetWindowFullscreen(window, isOverlayMode);
                     }
@@ -155,30 +197,29 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Cálculo de delta time real com alta precisão
         uint64_t currentCounter = SDL_GetPerformanceCounter();
         float dt = (float)(currentCounter - lastCounter) / (float)perfFreq;
         lastCounter = currentCounter;
 
-        // Limite de segurança de dt para evitar saltos
         if (dt > 0.05f) dt = 0.05f;
 
-        // Atualização da simulação física (equações de movimento, inércia, torque, amortecimento)
-        physics.update(dt);
+        float globalX = 0.0f, globalY = 0.0f;
+        if (!SDL_GetWindowFlags(window) && bridgeServer.getHyprlandPointerPos(globalX, globalY)) {
+            physics.setPivotPosition(globalX, globalY);
+        }
 
-        // Renderização
+        physics.update(dt);
+        bridgeServer.publish(physics.angle);
+
         SDL_GetWindowSize(window, &windowWidth, &windowHeight);
 
         if (isOverlayMode) {
-            // Modo transparente / translúcido
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
         } else {
-            // Fundo escuro com sutil grade cartesiana para referência espacial
             SDL_SetRenderDrawColor(renderer, 20, 24, 34, 255);
             SDL_RenderClear(renderer);
 
-            // Grade de fundo suave
             SDL_SetRenderDrawColor(renderer, 32, 38, 52, 255);
             const int gridSize = 64;
             for (int gx = 0; gx < windowWidth; gx += gridSize) {
@@ -189,23 +230,22 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Renderiza o cursor com o pivô físico no ponto de evento
         cursorRend.render(renderer, physics);
 
-        // Feedback de clique no ponto de evento
         if (isLeftMouseDown) {
-            cursorRend.drawCircle(renderer, physics.pivotPos, 9.0f, {255, 80, 80, 200}, false);
-            cursorRend.drawCircle(renderer, physics.pivotPos, 14.0f, {255, 120, 120, 130}, false);
+            cursorRend.drawCircle(renderer, physics.pivotPos, 8.0f, {255, 80, 80, 220}, false);
+            cursorRend.drawCircle(renderer, physics.pivotPos, 14.0f, {255, 120, 120, 140}, false);
         }
 
-        // Renderiza o painel HUD de telemetria e controles
         hud.render(renderer, physics, cursorRend, windowWidth, windowHeight, isOverlayMode);
 
-        // Apresenta na tela
         SDL_RenderPresent(renderer);
 
-        // Pequeno sleep para aliviar CPU se VSync não limitar a taxa
         std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+
+    if (cursorRend.sysCursor.texture) {
+        SDL_DestroyTexture(cursorRend.sysCursor.texture);
     }
 
     SDL_ShowCursor();

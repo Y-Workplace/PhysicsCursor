@@ -1,122 +1,110 @@
-# PhysicsCursor
+# PhysicsCursor - Simulação Física de Cursor no CachyOS (Wayland / Hyprland)
 
-[![Language](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B20)
-[![Compositor](https://img.shields.io/badge/Wayland-Hyprland-brightgreen.svg)](https://hyprland.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Aplicativo nativo em **C++20** com **SDL3** projetado para rodar em **CachyOS** sob **Wayland** (e compositores como Hyprland).
 
-**PhysicsCursor** brings realistic physical inertia, rotational torque, and elastic harmonic spring dynamics to your mouse cursor on Linux (Wayland / Hyprland), preserving 100% of native cursor shape changes (hovering links, text selection, resizing) with **zero risk of compositor crashes**.
-
----
-
-## Features
-
-- **Exact Event Point Pivot:** The rotation anchor is strictly pinned to the cursor's interaction hotspot (`(0, 0)` / click pixel). The tip never drifts while the cursor body swings dynamically.
-- **Symmetric Harmonic Physics:** Moving left or right produces smooth, symmetric air drag and inertia. Stopping suddenly produces an organic, underdamped elastic spring wobble before resting.
-- **Out-of-Process Sandbox (Crash-Proof):** The physics engine runs in a lightweight, isolated user daemon and communicates with Hyprland via POSIX Shared Memory (`/dev/shm`). If the daemon stops, the cursor instantly falls back to static mode without ever taking down your desktop.
-- **Full Hover Compatibility:** Operates at the compositor level so your active cursor theme (e.g., `Bibata-Modern-Ice`) continues switching to link pointers, text I-beams, and resize grips seamlessly.
-- **Interactive Playground Included:** Launch `physics_cursor` directly to tweak spring constants, mass, damping, and inspect real-time force vectors on an interactive HUD.
+O aplicativo implementa uma simulação física completa para o cursor do mouse:
+- **Pivô Fixo no Ponto de Evento:** O hotspot de clique (o primeiro pixel / ponta afiada do cursor `(0, 0)`) permanece travado na posição exata do evento do mouse.
+- **Balanço e Inércia Angular:** Ao mover o cursor em qualquer direção, o corpo do ponteiro oscila e balança de acordo com a aceleração, velocidade e arrasto aerodinâmico.
+- **Mola Torsional e Amortecimento:** O cursor tende a retornar à sua inclinação de repouso natural amortecendo suavemente (sem efeito robótico).
 
 ---
 
-## Quick Install (One-Line)
+## Princípios Físicos Implementados
 
-### From Cloned Repository:
+1. **Pivô não-inercial:**
+   - Origem local $(0,0)$ posicionada no ponto de evento do mouse.
+   - O corpo do cursor gira em torno desse vértice.
+
+2. **Cinemática ($\vec{v}$ e $\vec{a}$):**
+   - Velocidade instantânea: $\vec{v}(t) = \frac{\Delta \vec{p}}{\Delta t}$ (com filtro passa-baixa).
+   - Aceleração instantânea: $\vec{a}(t) = \frac{\Delta \vec{v}}{\Delta t}$ (com filtro passa-baixa).
+
+3. **Dinâmica Não-Inercial (2ª Lei de Newton para Rotação):**
+   - **Força Fictícia de Inércia:** $\vec{F}_{\text{inércia}} = -m \vec{a}$
+   - **Arrasto com o Fluido (Ar):** $\vec{F}_{\text{drag}} = -C_{\text{drag}} \|\vec{v}\| \vec{v}$
+   - **Torque Externo:** $\tau_{\text{ext}} = \vec{r}_{cm} \times (\vec{F}_{\text{inércia}} + \vec{F}_{\text{drag}})$
+   - **Mola Torsional:** $\tau_{\text{spring}} = -k (\theta - \theta_{\text{rest}})$
+   - **Amortecimento Viscoso:** $\tau_{\text{damping}} = -\gamma \omega$
+   - **Momento de Inércia:** $I = \frac{1}{3} m L^2$
+   - **Equação Diferencial:** $I \frac{d^2\theta}{dt^2} = \tau_{\text{ext}} + \tau_{\text{spring}} + \tau_{\text{damping}}$
+
+---
+
+## Como Executar
+
+### Pré-requisitos
+No CachyOS, as bibliotecas necessárias já estão disponíveis:
+- Compilador C++ com suporte a C++20 (`gcc` / `g++`)
+- `sdl3` (`pacman -S sdl3`)
+- `pkg-config` e `make`
+
+### Compilar e Rodar
+No diretório do projeto:
 ```bash
-git clone https://github.com/<your-username>/PhysicsCursor.git
-cd PhysicsCursor
-bash install.sh
-```
-
-*(Precompiled binaries for x86_64 are included in `bin/` for instant 2-second installation without needing to compile headers).*
-
----
-
-## How It Works: The Shared Memory Bridge
-
-```
-┌────────────────────────────────────────────────────────┐
-│         PhysicsCursor Daemon (Isolated Process)        │
-│  - Calculates angular dynamics, spring & inertia       │
-│  - Runs at ~120 Hz with sub-stepping                   │
-│  - Writes instantaneous angle to /dev/shm              │
-└──────────────────────────┬─────────────────────────────┘
-                           │  POSIX Shared Memory
-                           ▼  (Latency < 0.001 ms)
-┌────────────────────────────────────────────────────────┐
-│            Hyprland Plugin (Minimal Consumer)          │
-│  - Reads atomic rotation float from shared RAM         │
-│  - Rotates native hardware cursor around hotspot       │
-│  - Preserves 100% of native hover shapes               │
-│  - ZERO crash risk to the compositor                   │
-└────────────────────────────────────────────────────────┘
-```
-
----
-
-## Building from Source
-
-If you prefer building from source on your machine:
-```bash
-# Build Daemon & Interactive App
 make
-
-# Build Hyprland Plugin
-make -C plugin
-
-# Or run the installer in build mode:
-bash install.sh --build
+make run
 ```
-
-### Dependencies
-- C++20 compiler (`gcc` / `g++`)
-- `sdl3`
-- `libXcursor`
-- `hyprland-headers` (only needed if compiling the plugin from source)
-
----
-
-## Usage & Controls
-
-- **Start Background Daemon:**
-  ```bash
-  bash start_daemon.sh
-  ```
-- **Stop Daemon:**
-  ```bash
-  bash stop_daemon.sh
-  ```
-- **Launch Interactive Playground / HUD:**
-  ```bash
-  physics_cursor
-  # or:
-  bash run.sh
-  ```
-
-### Interactive HUD Hotkeys
-| Key | Action |
-|---|---|
-| `[1] / [2]` | Decrease / Increase Air Drag Sensitivity |
-| `[3] / [4]` | Decrease / Increase Spring Stiffness ($k$) |
-| `[5] / [6]` | Decrease / Increase Viscous Damping ($\gamma$) |
-| `[7] / [8]` | Decrease / Increase Inertial Kick ($m \cdot a$) |
-| `[C]` | Toggle between System Native Cursor & Vector Cursor |
-| `[V]` | Toggle Real-time Physics Vectors |
-| `[T]` | Toggle Motion Trail |
-| `[Space]` | Apply manual test impulse |
-| `[R]` | Reset parameters to defaults |
-
----
-
-## Uninstallation
-
-To cleanly remove PhysicsCursor and restore default settings:
+Ou usando o script launcher:
 ```bash
-bash uninstall.sh
+bash run.sh
+```
+
+Para abrir diretamente no modo overlay / tela cheia transparente:
+```bash
+bash run.sh --overlay
 ```
 
 ---
 
-## License
+## Controles e Teclas de Atalho
 
-This project is licensed under the [MIT License](LICENSE).
-Compositor rendering layer adapted from [VirtCode/hypr-dynamic-cursors](https://github.com/VirtCode/hypr-dynamic-cursors) (MIT).
+| Tecla | Ação |
+|---|---|
+| **Mover o Mouse** | Move o pivô e induz torque inercial e de arrasto |
+| **Clique Esquerdo** | Dispara pulso inercial tátil no ponto de evento |
+| **[Space]** | Aplica impulso angular manual para testar oscilação |
+| **[1] / [2]** | Diminuir / Aumentar **Massa ($m$)** |
+| **[3] / [4]** | Diminuir / Aumentar **Rigidez da Mola ($k$)** |
+| **[5] / [6]** | Diminuir / Aumentar **Amortecimento ($\gamma$)** |
+| **[7] / [8]** | Diminuir / Aumentar **Arrasto do Ar ($C_{\text{drag}}$)** |
+| **[G]** | Ligar / Desligar Gravidade no plano vertical |
+| **[V]** | Mostrar / Ocultar **Vetores de Física** em tempo real |
+| **[P]** | Mostrar / Ocultar **Pivô (Ponto de Evento)** no 1º pixel |
+| **[T]** | Ativar / Desativar **Rastro Inercial (Motion Trail)** |
+| **[H]** | Mostrar / Ocultar **Painel de Telemetria (HUD)** |
+| **[+] / [-]** | Aumentar / Diminuir tamanho visual do cursor |
+| **[R]** | Resetar todos os parâmetros para os valores de fábrica |
+| **[F11] ou [O]** | Alternar entre Modo Janela (Playground) e Overlay |
+| **[Esc] ou [Q]** | Sair do aplicativo |
+
+---
+
+## Vetores Visuais no Modo Debug ([V])
+
+- **Ponto Vermelho:** O primeiro pixel / ponto de contato (pivô inviolável).
+- **Ponto Azul:** Centro de Massa ($CM$) do cursor.
+- **Vetor Verde ($\vec{v}$):** Velocidade do cursor.
+- **Vetor Laranja ($\vec{a}$):** Aceleração do pivô.
+- **Vetor Magenta ($\vec{F}_{\text{inércia}}$):** Força de inércia exercida sobre o corpo.
+- **Vetor Ciano ($\vec{F}_{\text{drag}}$):** Arrasto dinâmico do ar.
+- **Arco Amarelo:** Ângulo instantâneo de deflexão em relação à posição de repouso.
+
+---
+
+## Dica: Efeito Global no Hyprland
+
+Se você deseja que **todo o sistema CachyOS / Hyprland** aplique esse efeito em todas as janelas nativamente no nível do compositor, você também pode usar o plugin oficial do Hyprland:
+```bash
+hyprpm update
+hyprpm add https://github.com/VirtCode/hypr-dynamic-cursors
+hyprpm enable hypr-dynamic-cursors
+```
+Configuração no `~/.config/hypr/hyprland.conf`:
+```ini
+plugin {
+    dynamic-cursors {
+        enabled = true
+        mode = rotate
+    }
+}
+```

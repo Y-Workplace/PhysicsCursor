@@ -1,6 +1,6 @@
 CXX = g++
-CXXFLAGS = -std=c++20 -O3 -Wall -Wextra $(shell pkg-config --cflags sdl3) -Isrc
-LDFLAGS = $(shell pkg-config --libs sdl3) -lm
+CXXFLAGS = -std=c++20 -O3 -Wall -Wextra $(shell pkg-config --cflags sdl3 xcursor) -Isrc
+LDFLAGS = $(shell pkg-config --libs sdl3 xcursor) -lm
 
 TARGET = physics_cursor
 SRCS = src/main.cpp src/Font8x8.cpp
@@ -20,7 +20,10 @@ clean:
 run: $(TARGET)
 	/lib64/ld-linux-x86-64.so.2 ./$(TARGET)
 
+run-daemon: $(TARGET)
+	/lib64/ld-linux-x86-64.so.2 ./$(TARGET) --daemon
+
 run-overlay: $(TARGET)
 	/lib64/ld-linux-x86-64.so.2 ./$(TARGET) --overlay
 
-.PHONY: all clean run run-overlay
+.PHONY: all clean run run-daemon run-overlay
