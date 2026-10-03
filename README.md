@@ -25,9 +25,8 @@ execute novamente `bash install.sh`.
 
 Os executáveis são instalados em `~/.local/bin/physics_cursor` e
 `~/.local/share/hyprland/plugins/dynamic-cursors.so`. O instalador configura
-`hyprland.lua` ou `hyprland.conf` e inicia o daemon. Se o compositor já estiver
-com a versão anterior do plugin carregada, recarregue o plugin ou reinicie
-sua sessão para usar o novo binário.
+`hyprland.lua` ou `hyprland.conf` e inicia o daemon. O instalador recarrega o plugin na sessão acessível do Hyprland. Se ele não
+conseguir acessar o compositor, reinicie sua sessão para carregar o novo binário.
 
 ## Escolher parâmetros, compilar e testar na simulação
 
@@ -76,7 +75,8 @@ usado pelo simulador e pelo daemon.
 ## Cursor ampliado ao sacudir
 
 Sacudir rapidamente aumenta o cursor e mantém sua rotação física. O plugin
-habilita `shake:effects` por padrão e preserva o pivô da textura ampliada,
+preserva a física em modo `tilt`, mesmo com `shake:effects = false` em uma
+configuração antiga, e preserva o pivô da textura ampliada,
 inclusive ao usar uma imagem de maior resolução do tema. O cursor ampliado
 usa renderização por software, com uma região de desenho que inclui sua rotação.
 
@@ -126,3 +126,7 @@ pgrep -fa 'physics_cursor --daemon'
 Ao encerrar o daemon, o plugin usa sua física local como alternativa em modo
 `tilt`. Abrir e fechar a simulação não encerra o daemon. As alterações visuais
 não modificam os eventos de clique ou o movimento enviado aos aplicativos.
+
+Os testes são executados pelo carregador ELF, assim como o simulador. Isso
+permite executar o fluxo a partir de volumes como `/mnt/archives` que não
+preservam a permissão de execução dos binários compilados.

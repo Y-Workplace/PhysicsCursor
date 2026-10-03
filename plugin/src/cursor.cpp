@@ -28,6 +28,7 @@
 #include "render/renderer.hpp"
 #include "config/ConfigManager.hpp"
 #include "mode/Mode.hpp"
+#include "../../src/CursorEffects.hpp"
 #include "render/CursorPassElement.hpp"
 
 void tickRaw(SP<CEventLoopTimer> self, void* data) {
@@ -424,25 +425,19 @@ void CDynamicCursors::calculate(EModeUpdate type) {
     } else
         resultMode = SModeResult();
 
-    // The daemon uses the simulator's PhysicsEngine. Read its angle directly
-    // on each compositor tick, including the spring return after movement stops.
-    if (daemonActive && mode == &tilt)
-        resultMode.rotation = daemonAngle;
-
     lastMode = mode;
 
     if (CONFIG(shakeEnabled)) {
         if (type == TICK)
             resultShake = shake.update(Pointer::mgr()->m_pointerPos);
 
-        // reset mode results if shaking
-        if (resultShake > 1 && !CONFIG(shakeEffects))
-            resultMode = SModeResult();
     } else
         resultShake = 1;
 
-    auto result = resultMode;
-    result.scale *= resultShake;
+    // Apply the daemon angle after shake handling. Scaling must never clear
+    // tilt physics, and presentation must not reset the mode's cached state.
+    auto result = composeCursorEffects(resultMode, resultShake, CONFIG(shakeEffects),
+                                       mode == &tilt, daemonActive, daemonAngle);
 
     if (resultShown.hasDifference(&result, CONFIG(threshold) * (std::numbers::pi / 180.0), 0.01, 0.01)) {
         resultShown = result;

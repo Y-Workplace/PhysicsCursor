@@ -32,11 +32,11 @@ run-overlay: $(TARGET)
 .PHONY: all clean run run-daemon run-overlay
 
 TEST_BINARY = build/physics_tests
-$(TEST_BINARY): tests/physics_tests.cpp src/PhysicsEngine.hpp src/PhysicsDefaults.hpp src/BuildAction.hpp
+$(TEST_BINARY): tests/physics_tests.cpp src/PhysicsEngine.hpp src/PhysicsDefaults.hpp src/BuildAction.hpp src/CursorEffects.hpp
 	@mkdir -p build
 	$(CXX) -std=c++20 -O2 -Wall -Wextra -Isrc $< -o $@
 
 test: $(TEST_BINARY)
-	./$(TEST_BINARY)
+	/lib64/ld-linux-x86-64.so.2 ./$(TEST_BINARY)
 
 .PHONY: test

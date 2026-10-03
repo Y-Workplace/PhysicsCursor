@@ -18,7 +18,8 @@ echo "[1/4] Compilando e testando para esta versao do Hyprland..."
 bash "$DIR/build.sh"
 cp "$DIR/bin/physics_cursor" "$BIN_DIR/physics_cursor.new"
 mv "$BIN_DIR/physics_cursor.new" "$BIN_DIR/physics_cursor"
-cp "$DIR/bin/dynamic-cursors.so" "$PLUGIN_DIR/dynamic-cursors.so"
+cp "$DIR/bin/dynamic-cursors.so" "$PLUGIN_DIR/dynamic-cursors.so.new"
+mv "$PLUGIN_DIR/dynamic-cursors.so.new" "$PLUGIN_DIR/dynamic-cursors.so"
 
 chmod +x "$BIN_DIR/physics_cursor" 2>/dev/null || true
 
@@ -84,7 +85,17 @@ setsid "$BIN_DIR/physics_cursor" --daemon </dev/null >/tmp/physics_cursor_daemon
 # 4. Recarregar o Hyprland
 echo "[4/4] Recarregando compositor Hyprland..."
 if command -v hyprctl >/dev/null 2>&1; then
-    hyprctl reload >/dev/null 2>&1 || true
+    # Replacing the file alone leaves the previous plugin loaded in memory.
+    # Unload by its registered path, then let config reload load the new inode.
+    if hyprctl plugin list >/dev/null 2>&1; then
+        hyprctl plugin unload "$PLUGIN_DIR/dynamic-cursors.so" >/dev/null 2>&1 || true
+        hyprctl reload
+        if ! hyprctl plugin list | grep -q 'dynamic-cursors'; then
+            hyprctl plugin load "$PLUGIN_DIR/dynamic-cursors.so"
+        fi
+    else
+        echo "[PhysicsCursor] Sem acesso a sessao do Hyprland. Reinicie a sessao para carregar o plugin atualizado."
+    fi
 fi
 
 echo ""

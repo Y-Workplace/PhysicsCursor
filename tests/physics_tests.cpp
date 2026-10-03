@@ -1,4 +1,5 @@
 #include "BuildAction.hpp"
+#include "CursorEffects.hpp"
 #include <cmath>
 #include <iostream>
 #include <thread>
@@ -53,6 +54,30 @@ static void testPhysics() {
             "Spring response depends on render refresh rate");
 }
 
+static void testMagnifiedPhysics() {
+    // Minimal rendering result exercises the same composition used by the plugin,
+    // without requiring a running compositor for these regression tests.
+    struct Result { double rotation = 0; double scale = 1; };
+    const Result local{0.25, 1};
+    for (const bool effects : {false, true}) {
+        for (const double zoom : {1.0, 4.0, 8.0, 3.0, 1.0}) {
+            for (const double angle : {0.4, -0.2, 0.05}) {
+                const auto result = composeCursorEffects(local, zoom, effects, true, true, angle);
+                require(result.rotation == angle && result.scale == zoom,
+                        "Magnification suppressed or froze daemon physics");
+            }
+            const auto fallback = composeCursorEffects(local, zoom, effects, true, false, 0);
+            require(fallback.rotation == local.rotation && fallback.scale == zoom,
+                    "Magnification suppressed local tilt fallback");
+        }
+    }
+    const auto otherMode = composeCursorEffects(local, 4, false, false, true, 0.4);
+    require(otherMode.rotation == 0 && otherMode.scale == 4,
+            "Legacy shake suppression changed for non-tilt mode");
+    require(local.rotation == 0.25 && local.scale == 1,
+            "Presentation overwrote ongoing physics state");
+}
+
 static void testBuildExport() {
     namespace fs = std::filesystem;
     char name[] = "/tmp/physics-cursor-export-XXXXXX";
@@ -91,8 +116,9 @@ static void testBuildExport() {
 int main() {
     try {
         testPhysics();
+        testMagnifiedPhysics();
         testBuildExport();
-        std::cout << "Physics and playground export tests passed.\n";
+        std::cout << "Physics, magnification and playground export tests passed.\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
