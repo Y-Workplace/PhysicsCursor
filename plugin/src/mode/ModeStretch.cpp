@@ -16,7 +16,10 @@ SModeResult CModeStretch::update(Vector2D pos) {
     auto window   = CONFIG(stretchWindow);
 
     // create samples array
-    int max = std::max(1, (int)(g_pHyprRenderer->m_mostHzMonitor->m_refreshRate / 1000 * window)); // [window]ms worth of history, avoiding divide by 0
+    float refreshRate = (g_pHyprRenderer && g_pHyprRenderer->m_mostHzMonitor && g_pHyprRenderer->m_mostHzMonitor->m_refreshRate > 0)
+                            ? (float)g_pHyprRenderer->m_mostHzMonitor->m_refreshRate
+                            : 60.0f;
+    int max = std::max(1, (int)(refreshRate / 1000.0f * window)); // [window]ms worth of history, avoiding divide by 0
     samples.resize(max, pos);
     samples_index = std::min(samples_index, max - 1);
 

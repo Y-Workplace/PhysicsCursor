@@ -50,9 +50,11 @@ hl.config({
     },
 })
 
-if hl.plugin.dynamic_cursors and hl.plugin.dynamic_cursors.shape_rule then
-    hl.plugin.dynamic_cursors.shape_rule({ shape = "text", mode = "none" })
-end
+-- Shape rules (optional):
+-- To make the text (I-beam) cursor static for text selection, uncomment below:
+-- if hl.plugin.dynamic_cursors and hl.plugin.dynamic_cursors.shape_rule then
+--     hl.plugin.dynamic_cursors.shape_rule({ shape = "text", mode = "none" })
+-- end
 EOF
 
     if ! grep -q "config.cursor_bridge" "$HYPR_CONFIG_DIR/hyprland.lua"; then
@@ -69,7 +71,8 @@ plugin:dynamic-cursors {
     enabled = true
     mode = tilt
     threshold = 0
-    shaperule = text, none
+    # Optional: static text cursor
+    # shaperule = text, none
 }
 exec-once = physics_cursor --daemon
 EOF

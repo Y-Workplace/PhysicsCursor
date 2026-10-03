@@ -35,7 +35,10 @@ CShake::CShake() {
 
 double CShake::update(Vector2D pos) {
 
-    int max = std::max(1, (int)(g_pHyprRenderer->m_mostHzMonitor->m_refreshRate)); // 1s worth of history, avoiding divide by 0
+    float refreshRate = (g_pHyprRenderer && g_pHyprRenderer->m_mostHzMonitor && g_pHyprRenderer->m_mostHzMonitor->m_refreshRate > 0)
+                            ? (float)g_pHyprRenderer->m_mostHzMonitor->m_refreshRate
+                            : 60.0f;
+    int max = std::max(1, (int)refreshRate); // 1s worth of history, avoiding divide by 0
     samples.resize(max);
     samples_distance.resize(max);
     samples_index = std::min(samples_index, max - 1);
@@ -66,7 +69,7 @@ double CShake::update(Vector2D pos) {
     // if diagonal sufficiently large and over threshold
     double amount = (trail / diagonal) - CONFIG(shakeThreshold);
     if (diagonal > 100 && amount > 0) {
-        float delta = 1.F / g_pHyprRenderer->m_mostHzMonitor->m_refreshRate;
+        float delta = 1.F / refreshRate;
 
         float next = this->zoom->goal();
 
