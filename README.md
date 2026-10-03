@@ -12,6 +12,10 @@ cd PhysicsCursor
 bash install.sh
 ```
 
+Por padrão o instalador **atualiza os arquivos sem carregar o plugin**, reiniciar
+o daemon ou recarregar a configuração do compositor. Ele preserva inclusive
+o bloqueio `ENABLED = false` que você colocar em `cursor_bridge.lua`.
+
 O instalador busca as dependências ausentes com `pacman` (pode pedir a senha
 do `sudo`), compila, executa os testes e instala os binários. Você não precisa
 baixar bibliotecas ou procurar cabeçalhos manualmente. A primeira instalação
@@ -25,8 +29,9 @@ execute novamente `bash install.sh`.
 
 Os executáveis são instalados em `~/.local/bin/physics_cursor` e
 `~/.local/share/hyprland/plugins/dynamic-cursors.so`. O instalador configura
-`hyprland.lua` ou `hyprland.conf` e inicia o daemon. O instalador recarrega o plugin na sessão acessível do Hyprland. Se ele não
-conseguir acessar o compositor, reinicie sua sessão para carregar o novo binário.
+`hyprland.lua` ou `hyprland.conf` sem ativar o plugin automaticamente. Para carregar somente nesta sessão, use
+`bash install.sh --activate`. Esse comando não altera o bloqueio de carregamento
+no login nem executa uma recarga global da configuração.
 
 ## Escolher parâmetros, compilar e testar na simulação
 
@@ -97,6 +102,40 @@ Em Lua, no bloco `plugin.dynamic_cursors`:
 shake = { enabled = true, effects = true },
 ```
 
+## Transição entre formatos de cursor
+
+Ao trocar entre formatos nomeados do tema (flecha, mão de link, texto, resize),
+o anterior desaparece encolhendo e girando 15°, enquanto o novo aparece com
+fade e uma curva elástica equivalente a `cubic-bezier(.34, 1.56, .64, 1)`.
+A transição fica **desativada por padrão** após a correção de inicialização.
+Para optar por ela, configure `transition:enabled = true` (ou `enabled = true`
+no bloco Lua `transition`). A duração padrão é 250 ms; a opacidade termina em 200 ms. Ao terminar,
+o cursor volta ao tamanho nativo do tema. A física e a ampliação por sacudida
+continuam ativas, e ambas as imagens giram em torno da ponta de clique real.
+
+Durante a transição o plugin usa renderização por software; ao terminar,
+libera esse modo quando a ampliação ou outro recurso não o exigir. Trocas
+rápidas preservam as imagens ainda visíveis com um limite de quatro imagens
+anteriores. Cursores desenhados pelo próprio aplicativo não são animados.
+
+Para desativar, no bloco `plugin.dynamic_cursors` em Lua:
+
+```lua
+transition = { enabled = false, duration = 250 },
+```
+
+Ou em `hyprland.conf`:
+
+```ini
+plugin:dynamic-cursors {
+    transition:enabled = false
+    transition:duration = 250
+}
+```
+
+A duração aceita valores entre 50 e 1000 ms. Desativar a transição mantém
+a física do cursor e o recurso de ampliação por sacudida.
+
 ## Compilar sem instalar
 
 ```bash
@@ -130,3 +169,21 @@ não modificam os eventos de clique ou o movimento enviado aos aplicativos.
 Os testes são executados pelo carregador ELF, assim como o simulador. Isso
 permite executar o fluxo a partir de volumes como `/mnt/archives` que não
 preservam a permissão de execução dos binários compilados.
+
+## Verificar o ciclo de vida do plugin sem arriscar o login
+
+O plugin não solicita recarga global da configuração durante `PLUGIN_INIT`.
+Sua inicialização visual é adiada até o loop de eventos, e o descarregamento
+cancela tarefas pendentes, remove hooks e destrói callbacks junto de seus donos.
+
+Além dos testes numéricos, este teste opcional abre um compositor aninhado com
+configuração, cache, runtime e socket IPC temporários. Ele testa o carregamento
+na configuração inicial, três ciclos de reload/unload/load e o encerramento:
+
+```bash
+python3 tests/plugin_lifecycle.py
+```
+
+Execute a partir de uma sessão Wayland já aberta. O teste não carrega o plugin
+na sessão principal, não altera sua configuração e não atualiza o ambiente do
+systemd. Os logs temporários são informados ao terminar.

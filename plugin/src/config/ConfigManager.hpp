@@ -10,6 +10,7 @@
 #include "prop/StringProp.hpp"
 
 #include <hyprlang.hpp>
+#include <hyprland/src/helpers/signal/Signal.hpp>
 #include <hyprutils/string/VarList.hpp>
 #include <hyprland/src/SharedDefs.hpp>
 #include <hyprland/src/config/values/types/BoolValue.hpp>
@@ -29,6 +30,8 @@ class CConfigHandler {
     SP<CBoolValue>   c_enabled;
     SP<CVariantProp> c_mode;
     SP<CIntValue>    c_threshold;
+    SP<CBoolValue>   c_transitionEnabled;
+    SP<CIntValue>    c_transitionDuration;
 
     SP<CBoolValue>  c_shakeEnabled;
     SP<CBoolValue>  c_shakeEffects;
@@ -70,11 +73,14 @@ class CConfigHandler {
 
     /* whether the plugin is enabled */
     bool isEnabled();
+    void reloadValues();
 
     /* shows an error overlay to the user, unless one is already shown */
     void showError(const std::string& err);
 
   private:
+    CHyprSignalListener preReloadListener;
+    CHyprSignalListener postReloadListener;
     SP<CBoolValue>    conf(const char* name, bool def, const char* desc);
     SP<CBoolProp>     prop(const char* name, bool def, const char* desc);
     SP<CIntValue>     conf(const char* name, int def, const char* desc);

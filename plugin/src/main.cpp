@@ -24,6 +24,8 @@
 #include "config/ConfigManager.hpp"
 
 typedef void (*origRenderSoftwareCursorsFor)(void*, PHLMONITOR, const Time::steady_tp&, CRegion&, std::optional<Vector2D>, bool, bool);
+inline UP<SEventLoopDoLaterLock> g_pDeferredInit;
+
 inline CFunctionHook* g_pRenderSoftwareCursorsForHook = nullptr;
 void hkRenderSoftwareCursorsFor(void* thisptr, PHLMONITOR pMonitor, const Time::steady_tp& now, CRegion& damage, std::optional<Vector2D> overridePos, bool screencopy,
                                 bool forceRender) {
@@ -178,10 +180,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // setup config
     g_pConfigHandler = makeUnique<CConfigHandler>();
-    HyprlandAPI::reloadConfig();
+    // Never reload configuration from PLUGIN_INIT. This function can be called
+    // by hl.plugin.load while the compositor is already parsing that config.
+    // Render hooks fall back to their originals until the idle initialization.
 
-    // init things
-    g_pDynamicCursors = makeUnique<CDynamicCursors>();
 
     // try hooking
     try {
@@ -243,14 +245,33 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         throw std::runtime_error("hooks failed for unknown reason");
     }
 
+    g_pDeferredInit = g_pEventLoopManager->doLaterLock([] {
+        if (!g_pConfigHandler || g_pDynamicCursors) return;
+        g_pConfigHandler->reloadValues();
+        g_pDynamicCursors = makeUnique<CDynamicCursors>();
+        g_pDynamicCursors->updateTheme();
+    });
+
     return {"dynamic-cursors", "a plugin to make your hyprland cursor more realistic, also adds shake to find", "Virt", "0.1"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
-
-    // we need to remove our pass elements because otherwise we'll have some
-    // invalid passes after unload, causing a SEGV
-    g_pHyprRenderer->m_renderPass.removeAllOfType("CCursorPassElement");
+    // Cancel pending work before unloading its code or destroying its owners.
+    g_pDeferredInit.reset();
+    for (auto** hook : {&g_pRenderSoftwareCursorsForHook, &g_pDamageIfSoftwareHook,
+                       &g_pRenderHWCursorBufferHook, &g_pSetHWCursorBufferHook,
+                       &g_pOnCursorMovedHook, &g_pMoveHook, &g_pSetCursorFromNameHook,
+                       &g_pSetCursorSurfaceHook, &g_pUpdateThemeHook}) {
+        if (*hook) {
+            HyprlandAPI::removeFunctionHook(PHANDLE, *hook);
+            *hook = nullptr;
+        }
+    }
+    if (g_pHyprRenderer)
+        g_pHyprRenderer->m_renderPass.removeAllOfType("CCursorPassElement");
+    g_pDynamicCursors.reset();
+    g_pConfigHandler.reset();
+    PHANDLE = nullptr;
 }
 
 // Do NOT change this function.

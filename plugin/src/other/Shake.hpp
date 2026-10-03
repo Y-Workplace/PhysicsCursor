@@ -2,6 +2,7 @@
 #include <hyprutils/animation/AnimatedVariable.hpp>
 #include <hyprutils/math/Vector2D.hpp>
 #include <vector>
+#include <hyprland/src/helpers/signal/Signal.hpp>
 
 #define IPC_SHAKE_START  "shakestart"
 #define IPC_SHAKE_UPDATE "shakeupdate"
@@ -24,6 +25,7 @@ class CShake {
     void force(std::optional<int> duration, std::optional<float> size);
 
   private:
+    CHyprSignalListener reloadListener;
     /* tracks whether the current shake has already been announced in the ipc */
     bool ipc = false;
 

@@ -23,7 +23,7 @@ CHighresHandler::CHighresHandler() {
     update();
 
     // and reload on config reload
-    static const auto LISTENER = Event::bus()->m_events.config.reloaded.listen([&]() -> void { update(); });
+    reloadListener = Event::bus()->m_events.config.reloaded.listen([this]() { update(); });
 }
 
 static void hcLogger(enum eHyprcursorLogLevel level, char* message) {

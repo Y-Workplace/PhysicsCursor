@@ -14,6 +14,8 @@
 #include "mode/ModeStretch.hpp"
 #include "other/Shake.hpp"
 #include "highres.hpp"
+#include "../../src/CursorTransition.hpp"
+#include <vector>
 
 class CDynamicCursors {
   public:
@@ -55,13 +57,28 @@ class CDynamicCursors {
 
     // current state of the cursor
     SModeResult resultMode;
-    double      resultShake;
+    double      resultShake = 1;
     Vector2D    lastPos; // used for warp compensation
 
     SModeResult resultShown;
 
     // whether we have already locked software for cursor zoom
     bool zoomSoftware = false;
+
+    struct ShapeLayer {
+        SP<Render::ITexture> texture;
+        Vector2D size;
+        Vector2D hotspot;
+        CursorTransitionFrame start;
+    };
+    std::vector<ShapeLayer> outgoingShapes;
+    std::string shapeName;
+    std::chrono::steady_clock::time_point transitionStart;
+    double transitionDuration = .25;
+    bool transitionSoftware = false;
+    double transitionElapsed() const;
+    void beginTransition();
+    void endTransition();
 
     // modes
     CModeRotate  rotate;
@@ -71,7 +88,7 @@ class CDynamicCursors {
 
     /* returns the current mode, nullptr if none is selected */
     IMode* currentMode();
-    IMode* lastMode; // used to reset the mode if it was switched (to prune stale data)
+    IMode* lastMode = nullptr; // used to reset the mode if it was switched (to prune stale data)
 
     // shake
     CShake shake;

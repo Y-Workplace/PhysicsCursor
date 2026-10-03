@@ -32,7 +32,7 @@
 #include "render/CursorPassElement.hpp"
 
 void tickRaw(SP<CEventLoopTimer> self, void* data) {
-    if (g_pConfigHandler->isEnabled())
+    if (g_pDynamicCursors)
         g_pDynamicCursors->onTick(Pointer::mgr().get());
 
     const int TIMEOUT = g_pHyprRenderer->m_mostHzMonitor && g_pHyprRenderer->m_mostHzMonitor->m_refreshRate > 0 ? 1000.0 / g_pHyprRenderer->m_mostHzMonitor->m_refreshRate : 16;
@@ -40,6 +40,7 @@ void tickRaw(SP<CEventLoopTimer> self, void* data) {
 }
 
 CDynamicCursors::CDynamicCursors() {
+    shapeName = g_pHyprRenderer->m_lastCursorData.name;
     this->tick = SP<CEventLoopTimer>(new CEventLoopTimer(std::chrono::microseconds(500), tickRaw, nullptr));
     g_pEventLoopManager->addTimer(this->tick);
 }
@@ -48,6 +49,8 @@ CDynamicCursors::~CDynamicCursors() {
     // stop and deallocate timer
     g_pEventLoopManager->removeTimer(this->tick);
     this->tick.reset();
+
+    endTransition();
 
     // release software lock
     if (zoomSoftware) {
@@ -127,26 +130,36 @@ void CDynamicCursors::renderSoftware(Pointer::CPointerManager* pointers, PHLMONI
     box.w *= zoom;
     box.h *= zoom;
 
-    if (box.intersection(CBox{{}, {pMonitor->m_size}}).empty())
-        return;
-
     box.scale(pMonitor->m_scale);
     box.x = std::round(box.x);
     box.y = std::round(box.y);
 
-    // we rotate the cursor by our calculated amount
-    box.rot = resultShown.rotation;
-
-    CCursorPassElement::SRenderData data;
-    data.tex = texture;
-    data.box = box;
-
-    data.hotspot          = renderHotspot * state->monitor->m_scale;
-    data.nearest          = nearest;
-    data.stretchAngle     = resultShown.stretch.angle;
-    data.stretchMagnitude = resultShown.stretch.magnitude;
-
-    g_pHyprRenderer->m_renderPass.add(makeUnique<CCursorPassElement>(data));
+    const bool animating = transitionSoftware;
+    const double elapsed = animating ? transitionElapsed() : transitionDuration;
+    const auto entering = animating ? cursorTransitionFrame(elapsed, transitionDuration, true) : CursorTransitionFrame{};
+    const auto pivot = box.pos() + renderHotspot * pMonitor->m_scale;
+    const auto submit = [&](SP<Render::ITexture> tex, Vector2D size, Vector2D hotspot,
+                            CursorTransitionFrame frame, bool nearestFilter) {
+        if (!tex || frame.opacity <= .001) return;
+        size *= frame.scale;
+        hotspot *= frame.scale;
+        CCursorPassElement::SRenderData data;
+        data.tex = tex;
+        data.box = CBox{pivot - hotspot, size};
+        data.box.rot = resultShown.rotation + frame.rotation;
+        data.hotspot = hotspot;
+        data.nearest = nearestFilter;
+        data.opacity = frame.opacity;
+        data.stretchAngle = resultShown.stretch.angle;
+        data.stretchMagnitude = resultShown.stretch.magnitude;
+        g_pHyprRenderer->m_renderPass.add(makeUnique<CCursorPassElement>(data));
+    };
+    for (const auto& old : outgoingShapes) {
+        submit(old.texture, old.size * zoom * pMonitor->m_scale,
+               old.hotspot * zoom * pMonitor->m_scale,
+               cursorTransitionFrame(elapsed, transitionDuration, false, old.start), CONFIG(highresNearest));
+    }
+    submit(texture, box.size(), renderHotspot * pMonitor->m_scale, entering, nearest);
 
     if (pointers->m_currentCursorImage.surface)
         pointers->m_currentCursorImage.surface->resource()->frame(now);
@@ -158,13 +171,13 @@ It is largely identical to hyprlands implementation, but expands the damage regi
 */
 void CDynamicCursors::damageSoftware(Pointer::CPointerManager* pointers) {
 
-    // we damage a padding of the diagonal around the hotspot, to accommodate for all possible hotspots and rotations
-    auto     zoom     = resultShown.scale;
-    Vector2D size     = pointers->m_currentCursorImage.size / pointers->m_currentCursorImage.scale * zoom;
-    int      diagonal = size.size();
-    Vector2D padding  = {diagonal, diagonal};
-
-    CBox b = CBox{pointers->m_pointerPos, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
+    const auto zoom = resultShown.scale;
+    auto size = pointers->m_currentCursorImage.size / pointers->m_currentCursorImage.scale;
+    double radius = size.size();
+    for (const auto& old : outgoingShapes)
+        radius = std::max(radius, old.size.size());
+    radius *= zoom * 1.25 * std::max({1.0, resultShown.stretch.magnitude.x, resultShown.stretch.magnitude.y});
+    CBox b{pointers->m_pointerPos - Vector2D{radius, radius}, Vector2D{2 * radius, 2 * radius}};
 
     static auto PNOHW = CConfigValue<Hyprlang::INT>("cursor:no_hardware_cursors");
 
@@ -174,7 +187,6 @@ void CDynamicCursors::damageSoftware(Pointer::CPointerManager* pointers) {
 
         if ((mw->softwareLocks > 0 || mw->hardwareFailed || *PNOHW) && b.overlaps({mw->monitor->m_position, mw->monitor->m_size})) {
             g_pHyprRenderer->damageBox(b, mw->monitor->shouldSkipScheduleFrameOnMouseEvent());
-            break;
         }
     }
 }
@@ -379,15 +391,23 @@ void CDynamicCursors::onCursorMoved(Pointer::CPointerManager* pointers) {
 }
 
 void CDynamicCursors::setShape(const std::string& shape) {
+    if (shape != shapeName && !shapeName.empty() && CONFIG(transitionEnabled))
+        beginTransition();
+    shapeName = shape;
     g_pConfigHandler->m_shapeRules->activate(shape);
     highres.loadShape(shape);
 }
 
 void CDynamicCursors::unsetShape() {
-    setShape("clientside");
+    // Client-rendered surfaces have no stable named theme image to retain.
+    endTransition();
+    shapeName = "clientside";
+    g_pConfigHandler->m_shapeRules->activate(shapeName);
+    highres.loadShape(shapeName);
 }
 
 void CDynamicCursors::updateTheme() {
+    endTransition();
     highres.update();
 }
 
@@ -395,7 +415,11 @@ void CDynamicCursors::updateTheme() {
 Handle cursor tick events.
 */
 void CDynamicCursors::onTick(Pointer::CPointerManager* pointers) {
-    calculate(TICK);
+    if (transitionSoftware && (!g_pConfigHandler->isEnabled() || !CONFIG(transitionEnabled) ||
+                               !pointers->hasCursor() || transitionElapsed() >= transitionDuration))
+        endTransition();
+    if (g_pConfigHandler->isEnabled())
+        calculate(TICK);
 }
 
 IMode* CDynamicCursors::currentMode() {
@@ -439,7 +463,7 @@ void CDynamicCursors::calculate(EModeUpdate type) {
     auto result = composeCursorEffects(resultMode, resultShake, CONFIG(shakeEffects),
                                        mode == &tilt, daemonActive, daemonAngle);
 
-    if (resultShown.hasDifference(&result, CONFIG(threshold) * (std::numbers::pi / 180.0), 0.01, 0.01)) {
+    if (transitionSoftware || resultShown.hasDifference(&result, CONFIG(threshold) * (std::numbers::pi / 180.0), 0.01, 0.01)) {
         resultShown = result;
         resultShown.clamp(CONFIG(threshold) * (std::numbers::pi / 180.0), 0.01, 0.01); // clamp low values so it is rendered pixel-perfectly when no effect
 
@@ -494,4 +518,59 @@ void CDynamicCursors::dispatchMagnify(std::optional<int> duration, std::optional
         return;
 
     shake.force(duration, size);
+}
+
+
+double CDynamicCursors::transitionElapsed() const {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - transitionStart).count();
+}
+
+void CDynamicCursors::beginTransition() {
+    auto* pointers = Pointer::mgr().get();
+    if (!pointers->hasCursor() || pointers->m_currentCursorImage.surface) {
+        endTransition();
+        return;
+    }
+    auto texture = pointers->getCurrentCursorTexture();
+    if (!texture) return;
+    const double elapsed = transitionSoftware ? transitionElapsed() : transitionDuration;
+    for (auto& old : outgoingShapes)
+        old.start = cursorTransitionFrame(elapsed, transitionDuration, false, old.start);
+    std::erase_if(outgoingShapes, [](const auto& old) { return old.start.opacity < .01; });
+
+    ShapeLayer old;
+    old.texture = texture;
+    old.size = pointers->m_currentCursorImage.size / pointers->m_currentCursorImage.scale;
+    old.hotspot = pointers->m_currentCursorImage.hotspot;
+    old.start = transitionSoftware ? cursorTransitionFrame(elapsed, transitionDuration, true) : CursorTransitionFrame{};
+    if (resultShown.scale > 1 && highres.getTexture() && highres.getBuffer()) {
+        old.texture = highres.getTexture();
+        auto buffer = highres.getBuffer();
+        old.hotspot = {buffer->m_hotspot.x / buffer->size.x * old.size.x,
+                       buffer->m_hotspot.y / buffer->size.y * old.size.y};
+    }
+    outgoingShapes.push_back(old);
+    // Retain a small bounded set for interrupted transitions on rapid hover.
+    if (outgoingShapes.size() > 4) outgoingShapes.erase(outgoingShapes.begin());
+    double opacity = 0;
+    for (const auto& layer : outgoingShapes) opacity += layer.start.opacity;
+    if (opacity > .001)
+        for (auto& layer : outgoingShapes) layer.start.opacity /= opacity;
+    transitionDuration = std::clamp<Config::INTEGER>(CONFIG(transitionDuration), 50, 1000) / 1000.0;
+    transitionStart = std::chrono::steady_clock::now();
+    if (!transitionSoftware) {
+        transitionSoftware = true;
+        pointers->lockSoftwareAll();
+    }
+    pointers->damageIfSoftware();
+}
+
+void CDynamicCursors::endTransition() {
+    if (!transitionSoftware) return;
+    // Damage old images before releasing them and restore the hardware path.
+    Pointer::mgr()->damageIfSoftware();
+    outgoingShapes.clear();
+    transitionSoftware = false;
+    Pointer::mgr()->unlockSoftwareAll();
+    Pointer::mgr()->damageIfSoftware();
 }

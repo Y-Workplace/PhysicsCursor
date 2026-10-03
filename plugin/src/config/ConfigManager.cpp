@@ -32,6 +32,9 @@ CConfigHandler::CConfigHandler() {
     c_mode            = prop(NS("mode"),                   "tilt",                 "sets the cursor behaviour (tilt, rotate, stretch, none)", {{"tilt", MODE_TILT}, {"rotate", MODE_ROTATE}, {"stretch", MODE_STRETCH}, {"none", MODE_NONE}});
     c_threshold       = conf(NS("threshold"),              2,                      "minimum angle difference in degrees after which the shape is changed");
 
+    c_transitionEnabled = conf(NS("transition:enabled"), false, "animate changes between named cursor shapes");
+    c_transitionDuration = conf(NS("transition:duration"), 250, "shape transition duration in milliseconds (50-1000)");
+
     c_shakeEnabled    = conf(NS("shake:enabled"),          true,                   "enables shake to find");
     c_shakeEffects    = conf(NS("shake:effects"),          true,                  "show cursor behaviour while shaking");
     c_shakeIPC        = conf(NS("shake:ipc"),              false,                  "enable ipc events for shake");
@@ -68,38 +71,40 @@ CConfigHandler::CConfigHandler() {
     HyprlandAPI::addLuaFunction(PHANDLE, "dynamic_cursors", "shape_rule", ::luaShapeRule);
 
     // clear shape rules on reload
-    static const auto LISTENER_PRE  = Event::bus()->m_events.config.preReload.listen([&]() -> void { m_shapeRules->clear(); });
-    static const auto LISTENER_POST = Event::bus()->m_events.config.reloaded.listen([&]() -> void {
-        std::string errors;
-
-        for (auto& wp : m_cachedValues) {
-            auto error = wp->reload();
-            if (!error)
-                continue;
-
-            Log::logger->log(Log::ERR, "[dynamic-cursors] cached value reload failed: {}", error.value());
-
-            if (!errors.empty())
-                errors += '\n';
-            errors += std::format("failed parsing `{}`: {}", wp->internal()->name(), error.value());
-        }
-
-        if (!errors.empty())
-            showError(errors);
-
-        // after reload, activate current shape
-        // this also reloads the props from the actual config
-        m_shapeRules->activate(g_pHyprRenderer->m_lastCursorData.name);
-    });
+    preReloadListener = Event::bus()->m_events.config.preReload.listen([this]() -> void { m_shapeRules->clear(); });
+    postReloadListener = Event::bus()->m_events.config.reloaded.listen([this]() { reloadValues(); });
 
     // add magnify dispatcher
     HyprlandAPI::addDispatcherV2(PHANDLE, NS("magnify"), ::dispatchMagnify);
     HyprlandAPI::addLuaFunction(PHANDLE, "dynamic_cursors", "dsp_magnify", ::luaMagnifyDispatcher);
 }
 
+void CConfigHandler::reloadValues() {
+    std::string errors;
+
+    for (auto& wp : m_cachedValues) {
+        auto error = wp->reload();
+        if (!error)
+            continue;
+
+        Log::logger->log(Log::ERR, "[dynamic-cursors] cached value reload failed: {}", error.value());
+
+        if (!errors.empty())
+            errors += '\n';
+        errors += std::format("failed parsing `{}`: {}", wp->internal()->name(), error.value());
+    }
+
+    if (!errors.empty())
+        showError(errors);
+
+    // after reload, activate current shape
+    // this also reloads the props from the actual config
+    m_shapeRules->activate(g_pHyprRenderer->m_lastCursorData.name);
+}
+
 bool CConfigHandler::isEnabled() {
     // make sure the compositor is properly initialized
-    return c_enabled->value() && g_pHyprRenderer->m_mostHzMonitor && g_pDynamicCursors;
+    return c_enabled->value() && g_pHyprRenderer && g_pHyprRenderer->m_mostHzMonitor && g_pDynamicCursors;
 }
 
 void CConfigHandler::showError(const std::string& err) {

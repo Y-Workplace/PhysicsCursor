@@ -19,12 +19,12 @@ CShake::CShake() {
     int time = 400;
 
     // add custom bezier (and read it after config reload)
-    static auto bezier = "dynamic-cursors-magnification";
+    constexpr auto bezier = "dynamic-cursors-magnification";
     Animation::mgr()->addBezierWithName(bezier, {0.22, 1.0}, {0.36, 1.0});
-    static const auto LISTENER = Event::bus()->m_events.config.reloaded.listen([&]() -> void { Animation::mgr()->addBezierWithName(bezier, {0.22, 1.0}, {0.36, 1.0}); });
+    reloadListener = Event::bus()->m_events.config.reloaded.listen([]() -> void { Animation::mgr()->addBezierWithName(bezier, {0.22, 1.0}, {0.36, 1.0}); });
 
     // wtf is this struct, what is pValues?
-    static SP<SAnimationPropertyConfig> properties = makeShared<SAnimationPropertyConfig>();
+    auto properties = makeShared<SAnimationPropertyConfig>();
     properties->internalBezier                     = bezier;
     properties->internalSpeed                      = time / 100.f;
     properties->internalEnabled                    = 1;

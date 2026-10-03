@@ -3,7 +3,10 @@
 #include <format>
 
 CVariantValue::CVariantValue(const char* name, const char* def, const char* desc, std::unordered_map<std::string, int> map) :
-    m_config(makeShared<CStringValue>(name, desc, std::string{def})), m_map(std::move(map)) {}
+    m_config(makeShared<CStringValue>(name, desc, std::string{def})), m_map(std::move(map)) {
+    // Defaults must be valid without forcing a global config reload.
+    m_cached = m_map.at(def);
+}
 
 std::optional<int> CVariantValue::lookup(const std::string& str) const {
     auto it = m_map.find(str);

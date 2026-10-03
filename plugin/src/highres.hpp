@@ -1,4 +1,5 @@
 #include <future>
+#include <hyprland/src/helpers/signal/Signal.hpp>
 #include <hyprland/src/pointer/cursor/CursorManager.hpp>
 #include <hyprland/src/render/Texture.hpp>
 #include <hyprland/src/helpers/memory/Memory.hpp>
@@ -21,6 +22,7 @@ class CHighresHandler {
     SP<Pointer::Cursor::CCursorBuffer> getBuffer();
 
   private:
+    CHyprSignalListener reloadListener;
     bool enabled = true;
 
     Hyprcursor::SCursorStyleInfo style;

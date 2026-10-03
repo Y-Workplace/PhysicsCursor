@@ -13,6 +13,7 @@ class CCursorPassElement : public IPassElement {
 
         Vector2D hotspot;
         bool     nearest;
+        float    opacity = 1.F;
         double   stretchAngle;
         Vector2D stretchMagnitude;
     };

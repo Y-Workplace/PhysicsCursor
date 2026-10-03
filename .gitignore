@@ -28,3 +28,6 @@ build/
 # Temporary files while applying playground parameters
 src/PhysicsDefaults.hpp.tmp
 /bin/*.new
+
+# Python lifecycle-test cache
+__pycache__/

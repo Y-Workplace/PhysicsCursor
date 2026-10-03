@@ -1,5 +1,6 @@
 #include "BuildAction.hpp"
 #include "CursorEffects.hpp"
+#include "CursorTransition.hpp"
 #include <cmath>
 #include <iostream>
 #include <thread>
@@ -78,6 +79,37 @@ static void testMagnifiedPhysics() {
             "Presentation overwrote ongoing physics state");
 }
 
+static void testShapeTransition() {
+    const auto first = cursorTransitionFrame(0, .25, true);
+    const auto last = cursorTransitionFrame(.25, .25, true);
+    require(first.opacity == 0 && first.scale == .6 && first.rotation < 0,
+            "New cursor must enter small, turned and transparent");
+    require(last.opacity == 1 && last.scale == 1 && last.rotation == 0,
+            "Transition must finish at the native shape and scale");
+    const auto gone = cursorTransitionFrame(.25, .25, false);
+    require(gone.opacity == 0 && std::abs(gone.scale - .6) < 1e-8 && gone.rotation > 0,
+            "Old cursor must fade, shrink and turn away");
+    double peak = 1;
+    for (int i = 0; i <= 250; ++i) {
+        const auto incoming = cursorTransitionFrame(i / 1000., .25, true);
+        const auto outgoing = cursorTransitionFrame(i / 1000., .25, false);
+        require(std::abs(incoming.opacity + outgoing.opacity - 1) < 1e-8,
+                "Transition lost visible opacity");
+        require(std::isfinite(incoming.rotation) && incoming.scale > 0,
+                "Transition generated invalid transform");
+        peak = std::max(peak, incoming.scale);
+    }
+    require(peak > 1.01 && peak < 1.25, "Missing or excessive elastic overshoot");
+    // A reversal retains both previously visible images without a opacity gap.
+    const auto a = cursorTransitionFrame(.09, .25, true);
+    const auto b = cursorTransitionFrame(.09, .25, false);
+    const auto newA = cursorTransitionFrame(.04, .25, false, a);
+    const auto newB = cursorTransitionFrame(.04, .25, false, b);
+    const auto next = cursorTransitionFrame(.04, .25, true);
+    require(std::abs(newA.opacity + newB.opacity + next.opacity - 1) < 1e-8,
+            "Interrupted transition lost opacity");
+}
+
 static void testBuildExport() {
     namespace fs = std::filesystem;
     char name[] = "/tmp/physics-cursor-export-XXXXXX";
@@ -117,8 +149,9 @@ int main() {
     try {
         testPhysics();
         testMagnifiedPhysics();
+        testShapeTransition();
         testBuildExport();
-        std::cout << "Physics, magnification and playground export tests passed.\n";
+        std::cout << "Physics, magnification, transitions and playground export tests passed.\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
