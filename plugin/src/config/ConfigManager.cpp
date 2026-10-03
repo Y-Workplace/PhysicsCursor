@@ -33,7 +33,7 @@ CConfigHandler::CConfigHandler() {
     c_threshold       = conf(NS("threshold"),              2,                      "minimum angle difference in degrees after which the shape is changed");
 
     c_shakeEnabled    = conf(NS("shake:enabled"),          true,                   "enables shake to find");
-    c_shakeEffects    = conf(NS("shake:effects"),          false,                  "show cursor behaviour while shaking");
+    c_shakeEffects    = conf(NS("shake:effects"),          true,                  "show cursor behaviour while shaking");
     c_shakeIPC        = conf(NS("shake:ipc"),              false,                  "enable ipc events for shake");
     c_shakeThreshold  = conf(NS("shake:threshold"),        6.0f,                   "controls how soon a shake is detected");
     c_shakeBase       = conf(NS("shake:base"),             4.0f,                   "magnification level immediately after shake start");

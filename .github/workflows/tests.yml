@@ -1,0 +1,13 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  physics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test physics and parameter export
+        run: make test
+      - name: Check shell scripts
+        run: bash -n build.sh scripts/bootstrap.sh install.sh run.sh start_daemon.sh stop_daemon.sh

@@ -17,6 +17,7 @@ enum class HUDLanguage {
 class HUD {
 public:
     bool visible = true;
+    std::string buildStatus;
     HUDLanguage language = HUDLanguage::EN;
 
     HUD() {
@@ -37,7 +38,7 @@ public:
         if (!visible) return;
         (void)winW;
 
-        SDL_FRect panelRect = { 15.0f, 15.0f, 470.0f, 350.0f };
+        SDL_FRect panelRect = { 15.0f, 15.0f, 470.0f, 385.0f };
         SDL_SetRenderDrawColor(renderer, 15, 20, 30, 220);
         SDL_RenderFillRect(renderer, &panelRect);
 
@@ -197,6 +198,13 @@ public:
             ss << "[V] Vectors | [T] Trail | [P] Pivot | [SPACE] Impulse";
         }
         EmbeddedFont::drawString(renderer, ss.str(), x, y, scale, {150, 200, 255, 255});
+
+        y += 16.0f;
+        EmbeddedFont::drawString(renderer,
+            isPT ? "[F9] Salvar, compilar e testar no sistema" : "[F9] Save, build and test on system",
+            x, y, scale, {255, 220, 150, 255});
+        y += 14.0f;
+        EmbeddedFont::drawString(renderer, buildStatus.substr(0, 55), x, y, scale, {150, 220, 200, 255});
 
         // Rodape de status
         std::string modeText;

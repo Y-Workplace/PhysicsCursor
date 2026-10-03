@@ -13,18 +13,12 @@ echo "========================================================"
 mkdir -p "$BIN_DIR"
 mkdir -p "$PLUGIN_DIR"
 
-# 1. Obter ou compilar os binários
-if [ -f "$DIR/bin/physics_cursor" ] && [ -f "$DIR/bin/dynamic-cursors.so" ] && [ "$1" != "--build" ]; then
-    echo "[1/4] Instalando binarios pre-compilados..."
-    cp "$DIR/bin/physics_cursor" "$BIN_DIR/physics_cursor"
-    cp "$DIR/bin/dynamic-cursors.so" "$PLUGIN_DIR/dynamic-cursors.so"
-else
-    echo "[1/4] Compilando a partir do codigo fonte..."
-    make -C "$DIR"
-    make -C "$DIR/plugin"
-    cp "$DIR/physics_cursor" "$BIN_DIR/physics_cursor"
-    cp "$DIR/plugin/out/dynamic-cursors.so" "$PLUGIN_DIR/dynamic-cursors.so"
-fi
+# Build against the user's Hyprland headers; install dependencies automatically.
+echo "[1/4] Compilando e testando para esta versao do Hyprland..."
+bash "$DIR/build.sh"
+cp "$DIR/bin/physics_cursor" "$BIN_DIR/physics_cursor.new"
+mv "$BIN_DIR/physics_cursor.new" "$BIN_DIR/physics_cursor"
+cp "$DIR/bin/dynamic-cursors.so" "$PLUGIN_DIR/dynamic-cursors.so"
 
 chmod +x "$BIN_DIR/physics_cursor" 2>/dev/null || true
 
@@ -46,6 +40,7 @@ hl.config({
             enabled = true,
             mode = "tilt",
             threshold = 0,
+            shake = { enabled = true, effects = true },
         },
     },
 })
@@ -71,6 +66,8 @@ plugin:dynamic-cursors {
     enabled = true
     mode = tilt
     threshold = 0
+    shake:enabled = true
+    shake:effects = true
     # Optional: static text cursor
     # shaperule = text, none
 }

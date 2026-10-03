@@ -4,7 +4,7 @@ SOURCE_FILES := $(wildcard ./src/*.cpp ./src/*/*.cpp ./src/*/*/*.cpp)
 HEADER_FILES := $(wildcard ./src/*.hpp ./src/*/*.hpp ./src/*/*/*.hpp)
 
 OBJECT_FILES := $(patsubst ./src/%.cpp, out/%.o, $(SOURCE_FILES))
-CXXFLAGS := -Wall -fPIC -std=c++26 -g \
+CXXFLAGS := -Wall -MMD -MP -fPIC -std=c++26 -g \
 	$(shell pkg-config --cflags hyprland pixman-1 libdrm | sed 's#-I\([^ ]*/hyprland\)\($$\| \)#-I\1 -I\1/src #g')
 
 OUTPUT=out/$(PLUGIN_NAME).so
@@ -15,6 +15,9 @@ endif
 
 .PHONY: all clean load unload format
 
+-include $(OBJECT_FILES:.o=.d)
+
+.DEFAULT_GOAL := all
 all: $(OUTPUT)
 
 $(OUTPUT): $(OBJECT_FILES)
@@ -26,7 +29,7 @@ out/%.o: ./src/%.cpp
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(EXTRA_CXXFLAGS) -c $< -o $@
 
 clean:
-	$(RM) $(OUTPUT) $(OBJECT_FILES)
+	$(RM) $(OUTPUT) $(OBJECT_FILES) $(OBJECT_FILES:.o=.d)
 
 format:
 	clang-format -i $(HEADER_FILES) $(SOURCE_FILES)

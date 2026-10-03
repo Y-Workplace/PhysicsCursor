@@ -21,3 +21,10 @@ build/
 *.swp
 *~
 .fuse_hidden*
+
+# Compiler header dependencies
+*.d
+
+# Temporary files while applying playground parameters
+src/PhysicsDefaults.hpp.tmp
+/bin/*.new

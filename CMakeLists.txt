@@ -5,7 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDL3 REQUIRED sdl3)
+pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
+pkg_check_modules(XCURSOR REQUIRED IMPORTED_TARGET xcursor)
 
 set(SOURCES
     src/main.cpp
@@ -27,7 +28,8 @@ target_include_directories(physics_cursor PRIVATE
 )
 
 target_link_libraries(physics_cursor PRIVATE
-    ${SDL3_LIBRARIES}
+    PkgConfig::SDL3
+    PkgConfig::XCURSOR
     m
 )
 
@@ -37,3 +39,10 @@ target_compile_options(physics_cursor PRIVATE
     -Wextra
     ${SDL3_CFLAGS_OTHER}
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(physics_tests tests/physics_tests.cpp)
+    target_include_directories(physics_tests PRIVATE src)
+    add_test(NAME physics_tests COMMAND physics_tests)
+endif()

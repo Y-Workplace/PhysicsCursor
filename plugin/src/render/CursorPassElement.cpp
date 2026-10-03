@@ -1,5 +1,7 @@
 #include "CursorPassElement.hpp"
 #include "renderer.hpp"
+#include <algorithm>
+#include <cmath>
 
 #include <hyprland/src/render/Renderer.hpp>
 
@@ -27,7 +29,13 @@ bool CCursorPassElement::needsPrecomputeBlur() {
 }
 
 std::optional<CBox> CCursorPassElement::boundingBox() {
-    return m_data.box.copy().scale(1.F / g_pHyprRenderer->m_renderData.pMonitor->m_scale).round();
+    // Rotation is around the hotspot, which may be far from the center of
+    // a magnified shape. Include every rotated corner in pass culling.
+    const auto pivot = m_data.box.pos() + m_data.hotspot;
+    const double radius = std::hypot(m_data.box.w, m_data.box.h) *
+                          std::max({1.0, m_data.stretchMagnitude.x, m_data.stretchMagnitude.y});
+    return CBox{pivot - Vector2D{radius, radius}, Vector2D{2 * radius, 2 * radius}}
+        .scale(1.F / g_pHyprRenderer->m_renderData.pMonitor->m_scale).round();
 }
 
 CRegion CCursorPassElement::opaqueRegion() {

@@ -10,6 +10,7 @@
 
 #include "mode/ModeRotate.hpp"
 #include "mode/ModeTilt.hpp"
+#include "mode/BridgeClient.hpp"
 #include "mode/ModeStretch.hpp"
 #include "other/Shake.hpp"
 #include "highres.hpp"
@@ -65,6 +66,7 @@ class CDynamicCursors {
     // modes
     CModeRotate  rotate;
     CModeTilt    tilt;
+    BridgeClient bridge;
     CModeStretch stretch;
 
     /* returns the current mode, nullptr if none is selected */

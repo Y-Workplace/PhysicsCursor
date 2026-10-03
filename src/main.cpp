@@ -9,6 +9,7 @@
 #include "SystemCursorLoader.hpp"
 #include "BridgeServer.hpp"
 #include "HUD.hpp"
+#include "BuildAction.hpp"
 
 static std::atomic<bool> g_running{true};
 
@@ -48,29 +49,29 @@ int main(int argc, char* argv[]) {
     // 1. MODO DAEMON (SEGUNDO PLANO SEM JANELA)
     // ==========================================
     if (isDaemonMode) {
-        std::cout << "[PhysicsCursor] Modo Daemon ativo. Publicando fisica no Hyprland via SHM (~120Hz)..." << std::endl;
-        float lastX = 0.0f, lastY = 0.0f;
-        uint64_t lastTime = getNowMs();
+        std::cout << "[PhysicsCursor] Modo Daemon ativo. Publicando fisica no Hyprland via SHM (500 Hz)..." << std::endl;
+        using Clock = std::chrono::steady_clock;
+        constexpr auto interval = std::chrono::microseconds(2000);
+        auto lastTime = Clock::now();
+        auto nextTick = lastTime;
 
         while (g_running.load()) {
-            uint64_t now = getNowMs();
-            float dt = (now - lastTime) / 1000.0f;
+            const auto now = Clock::now();
+            const float dt = std::chrono::duration<float>(now - lastTime).count();
             lastTime = now;
-            if (dt <= 0.0f || dt > 0.05f) dt = 0.008f; // ~120Hz
 
             float x = 0.0f, y = 0.0f;
-            if (bridgeServer.getHyprlandPointerPos(x, y)) {
-                if (x != lastX || y != lastY) {
-                    physics.setPivotPosition(x, y);
-                    lastX = x;
-                    lastY = y;
-                }
-            }
+            if (bridgeServer.getHyprlandPointerPos(x, y))
+                physics.setPivotPosition(x, y);
 
             physics.update(dt);
             bridgeServer.publish(physics.angle);
 
-            std::this_thread::sleep_for(std::chrono::microseconds(8000));
+            nextTick += interval;
+            // Resume from the current time after a stall, without a burst of updates.
+            if (nextTick <= Clock::now())
+                nextTick = Clock::now() + interval;
+            std::this_thread::sleep_until(nextTick);
         }
 
         std::cout << "[PhysicsCursor] Daemon encerrado com seguranca." << std::endl;
@@ -116,6 +117,7 @@ int main(int argc, char* argv[]) {
 
     CursorRenderer cursorRend;
     HUD hud;
+    BuildAction buildAction;
 
     SystemCursorData sysCursorData = SystemCursorLoader::loadSystemCursor(renderer);
     cursorRend.sysCursor = sysCursorData;
@@ -160,6 +162,8 @@ int main(int argc, char* argv[]) {
                     SDL_Keycode key = event.key.key;
                     if (key == SDLK_ESCAPE || key == SDLK_Q) {
                         g_running.store(false);
+                    } else if (key == SDLK_F9) {
+                        buildAction.start(physics);
                     } else if (key == SDLK_C) {
                         cursorRend.useSystemCursor = !cursorRend.useSystemCursor;
                     } else if (key == SDLK_L) {
@@ -248,6 +252,8 @@ int main(int argc, char* argv[]) {
             cursorRend.drawCircle(renderer, physics.pivotPos, 14.0f, {255, 120, 120, 140}, false);
         }
 
+        buildAction.poll();
+        hud.buildStatus = buildAction.status;
         hud.render(renderer, physics, cursorRend, windowWidth, windowHeight, isOverlayMode, bridgeServer.isDaemonActive());
 
         SDL_RenderPresent(renderer);

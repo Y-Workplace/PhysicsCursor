@@ -90,6 +90,7 @@ void CDynamicCursors::renderSoftware(Pointer::CPointerManager* pointers, PHLMONI
 
     auto texture = pointers->getCurrentCursorTexture();
     bool nearest = false;
+    auto renderHotspot = pointers->m_currentCursorImage.hotspot * zoom;
 
     if (zoom > 1) {
         // this first has to undo the hotspot transform from getCursorBoxGlobal
@@ -103,8 +104,10 @@ void CDynamicCursors::renderSoftware(Pointer::CPointerManager* pointers, PHLMONI
             auto buf = highres.getBuffer();
 
             // we calculate a more accurate hotspot location if we have bigger shapes
-            box.x -= (buf->m_hotspot.x / buf->size.x) * pointers->m_currentCursorImage.size.x * zoom;
-            box.y -= (buf->m_hotspot.y / buf->size.y) * pointers->m_currentCursorImage.size.y * zoom;
+            renderHotspot = {
+                (buf->m_hotspot.x / buf->size.x) * pointers->m_currentCursorImage.size.x * zoom,
+                (buf->m_hotspot.y / buf->size.y) * pointers->m_currentCursorImage.size.y * zoom};
+            box.translate(-renderHotspot);
 
             // only use nearest-neighbour if magnifying over size
             nearest = CONFIG(highresNearest) == 2 && pointers->m_currentCursorImage.size.x * zoom > buf->size.x;
@@ -137,7 +140,7 @@ void CDynamicCursors::renderSoftware(Pointer::CPointerManager* pointers, PHLMONI
     data.tex = texture;
     data.box = box;
 
-    data.hotspot          = pointers->m_currentCursorImage.hotspot * state->monitor->m_scale * zoom;
+    data.hotspot          = renderHotspot * state->monitor->m_scale;
     data.nearest          = nearest;
     data.stretchAngle     = resultShown.stretch.angle;
     data.stretchMagnitude = resultShown.stretch.magnitude;
@@ -406,6 +409,9 @@ IMode* CDynamicCursors::currentMode() {
 void CDynamicCursors::calculate(EModeUpdate type) {
 
     IMode* mode = currentMode();
+    const auto pos = Pointer::mgr()->m_pointerPos;
+    float daemonAngle = 0.0f;
+    const bool daemonActive = bridge.update(pos.x, pos.y, daemonAngle);
 
     // calculate angle and zoom
     if (mode) {
@@ -417,6 +423,11 @@ void CDynamicCursors::calculate(EModeUpdate type) {
             resultMode = mode->update(Pointer::mgr()->m_pointerPos);
     } else
         resultMode = SModeResult();
+
+    // The daemon uses the simulator's PhysicsEngine. Read its angle directly
+    // on each compositor tick, including the spring return after movement stops.
+    if (daemonActive && mode == &tilt)
+        resultMode.rotation = daemonAngle;
 
     lastMode = mode;
 

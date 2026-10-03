@@ -2,6 +2,7 @@
 #include <cmath>
 #include <deque>
 #include <algorithm>
+#include "PhysicsDefaults.hpp"
 
 struct Vector2D {
     float x{0.0f};
@@ -37,13 +38,13 @@ struct TrailPoint {
 
 class PhysicsEngine {
 public:
-    // --- Parâmetros Calibrados Exatos (Valores da Imagem do Usuário) ---
-    float mass = 1.0f;
-    float springK = 155.0f;            // 155.00000 (Rigidez da Mola)
-    float damping = 4.0f;              // 4.00000 (Amortecimento Reduzido / Suave)
-    float velocityInfluence = 0.00360f;// 0.00360 (Sensibilidade / Arrasto)
-    float inertiaInfluence = 0.00005f; // 0.00005 (Força Inercial m*a)
-    float maxDeflectionDeg = 45.0f;    // Deflexão máxima em graus
+    // Defaults are saved by the playground and compiled into both modes.
+    float mass = PhysicsDefaults::mass;
+    float springK = PhysicsDefaults::springK;
+    float damping = PhysicsDefaults::damping;
+    float velocityInfluence = PhysicsDefaults::velocityInfluence;
+    float inertiaInfluence = PhysicsDefaults::inertiaInfluence;
+    float maxDeflectionDeg = PhysicsDefaults::maxDeflectionDeg;
 
     // Estado do Pivô (Ponto de Evento do Cursor no pixel exato)
     Vector2D pivotPos{640.0f, 360.0f};
@@ -81,12 +82,12 @@ public:
     }
 
     void resetToDefault() {
-        mass = 1.0f;
-        springK = 155.0f;
-        damping = 4.0f;
-        velocityInfluence = 0.00360f;
-        inertiaInfluence = 0.00005f;
-        maxDeflectionDeg = 45.0f;
+        mass = PhysicsDefaults::mass;
+        springK = PhysicsDefaults::springK;
+        damping = PhysicsDefaults::damping;
+        velocityInfluence = PhysicsDefaults::velocityInfluence;
+        inertiaInfluence = PhysicsDefaults::inertiaInfluence;
+        maxDeflectionDeg = PhysicsDefaults::maxDeflectionDeg;
 
         angle = 0.0f;
         angularVelocity = 0.0f;
@@ -95,6 +96,7 @@ public:
         acceleration = {0.0f, 0.0f};
         lastFilteredVel = {0.0f, 0.0f};
         accumulator = 0.0f;
+        isInitialized = false;
         trail.clear();
     }
 
