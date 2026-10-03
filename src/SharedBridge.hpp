@@ -3,7 +3,11 @@
 #include <atomic>
 #include <chrono>
 
-constexpr const char* PHYSICS_CURSOR_SHM_NAME = "/physics_cursor_bridge_shm";
+// Tests can compile a private bridge so their pointer never drives the desktop daemon.
+#ifndef PHYSICS_CURSOR_SHM_PATH
+#define PHYSICS_CURSOR_SHM_PATH "/physics_cursor_bridge_shm"
+#endif
+constexpr const char* PHYSICS_CURSOR_SHM_NAME = PHYSICS_CURSOR_SHM_PATH;
 constexpr uint32_t PHYSICS_BRIDGE_MAGIC = 0x50485953; // 'PHYS'
 
 struct alignas(64) SharedCursorBridge {

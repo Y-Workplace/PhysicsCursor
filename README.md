@@ -187,3 +187,16 @@ python3 tests/plugin_lifecycle.py
 Execute a partir de uma sessão Wayland já aberta. O teste não carrega o plugin
 na sessão principal, não altera sua configuração e não atualiza o ambiente do
 systemd. Os logs temporários são informados ao terminar.
+
+Para exercitar também a transição real entre flecha, mão e texto:
+
+```bash
+python3 tests/plugin_lifecycle.py --transitions
+```
+
+Este modo compila uma cópia temporária do plugin e um daemon com memória
+compartilhada exclusiva. Verifica 20 reversões rápidas, desativação durante a
+animação, ampliação e liberação das imagens e travas de renderização ao terminar.
+O plugin auxiliar de inspeção existe somente no sandbox. A sessão principal e
+seu daemon continuam com suas configurações atuais. Se `grim` estiver instalado,
+o teste salva uma captura do cursor ampliado junto dos logs temporários.
