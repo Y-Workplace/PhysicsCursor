@@ -165,21 +165,21 @@ int main(int argc, char* argv[]) {
                     } else if (key == SDLK_L) {
                         hud.toggleLanguage();
                     } else if (key == SDLK_1) {
-                        physics.velocityInfluence = std::max(0.0002f, physics.velocityInfluence - 0.0002f);
+                        physics.velocityInfluence = std::max(0.0001f, physics.velocityInfluence - 0.0001f);
                     } else if (key == SDLK_2) {
-                        physics.velocityInfluence = std::min(0.010f, physics.velocityInfluence + 0.0002f);
+                        physics.velocityInfluence = std::min(0.005f, physics.velocityInfluence + 0.0001f);
                     } else if (key == SDLK_3) {
-                        physics.springK = std::max(20.0f, physics.springK - 15.0f);
+                        physics.springK = std::max(10.0f, physics.springK - 5.0f);
                     } else if (key == SDLK_4) {
-                        physics.springK = std::min(600.0f, physics.springK + 15.0f);
+                        physics.springK = std::min(300.0f, physics.springK + 5.0f);
                     } else if (key == SDLK_5) {
-                        physics.damping = std::max(2.0f, physics.damping - 2.0f);
+                        physics.damping = std::max(0.5f, physics.damping - 0.5f);
                     } else if (key == SDLK_6) {
-                        physics.damping = std::min(80.0f, physics.damping + 2.0f);
+                        physics.damping = std::min(30.0f, physics.damping + 0.5f);
                     } else if (key == SDLK_7) {
-                        physics.inertiaInfluence = std::max(0.00005f, physics.inertiaInfluence - 0.00008f);
+                        physics.inertiaInfluence = std::max(0.00002f, physics.inertiaInfluence - 0.00003f);
                     } else if (key == SDLK_8) {
-                        physics.inertiaInfluence = std::min(0.002f, physics.inertiaInfluence + 0.00008f);
+                        physics.inertiaInfluence = std::min(0.001f, physics.inertiaInfluence + 0.00003f);
                     } else if (key == SDLK_V) {
                         cursorRend.showPhysicsVectors = !cursorRend.showPhysicsVectors;
                     } else if (key == SDLK_P) {
