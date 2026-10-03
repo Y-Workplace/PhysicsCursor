@@ -117,6 +117,14 @@ public:
         return true;
     }
 
+    bool getHyprlandPointerPos(float& x, float& y, uint64_t& seq) {
+        if (!bridge) return false;
+        x = bridge->mouseX.load(std::memory_order_relaxed);
+        y = bridge->mouseY.load(std::memory_order_relaxed);
+        seq = bridge->moveSeq.load(std::memory_order_relaxed);
+        return true;
+    }
+
     void shutdown() {
         if (bridge) {
             if (isOwner) {
