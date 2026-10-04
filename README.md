@@ -31,7 +31,19 @@ The binaries are installed at `~/.local/bin/physics_cursor` and
 `~/.local/share/hyprland/plugins/dynamic-cursors.so`. The installer configures
 `hyprland.lua` or `hyprland.conf` without automatically activating the plugin.
 To load it in the current session, run `bash install.sh --activate`. This does
-not change the login startup guard or reload the entire compositor configuration.
+not change the plugin login startup guard or reload the entire compositor configuration.
+Activation also enables `physics-cursor.service` in the user systemd manager so
+physics starts again at login. This prevents the faster local fallback after a reboot.
+For an existing installation, enable daemon startup with:
+
+```bash
+bash scripts/install_daemon_service.sh --activate
+systemctl --user status physics-cursor.service
+```
+
+The service runs `~/.local/bin/physics_cursor` through the ELF loader and restarts
+on failure. F9 updates that installed binary and restarts the managed service.
+A normal installation only writes the service file; it does not enable or start it.
 
 ## Adjust parameters, build, and test in the playground
 

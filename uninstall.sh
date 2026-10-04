@@ -1,6 +1,10 @@
 #!/bin/bash
 echo "Removing PhysicsCursor..."
 
+systemctl --user disable --now physics-cursor.service 2>/dev/null || true
+rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/physics-cursor.service"
+systemctl --user daemon-reload 2>/dev/null || true
+
 pkill -f "physics_cursor" 2>/dev/null || true
 rm -f "$HOME/.local/bin/physics_cursor"
 rm -f "$HOME/.local/share/hyprland/plugins/dynamic-cursors.so"

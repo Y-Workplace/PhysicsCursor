@@ -32,6 +32,8 @@ mv "$PLUGIN_DIR/dynamic-cursors.so.new" "$PLUGIN_DIR/dynamic-cursors.so"
 
 chmod +x "$BIN_DIR/physics_cursor" 2>/dev/null || true
 
+bash "$DIR/scripts/install_daemon_service.sh"
+
 # 2. Configure Hyprland integration
 echo "[2/4] Configuring Hyprland integration..."
 
@@ -91,7 +93,7 @@ plugin:dynamic-cursors {
     # Optional: static text cursor
     # shaperule = text, none
 }
-exec-once = physics_cursor --daemon
+exec-once = systemctl --user start physics-cursor.service
 EOF
     fi
 fi
@@ -105,8 +107,8 @@ fi
 
 # 3. Start the physics daemon
 echo "[3/4] Starting the background daemon..."
-pkill -f "physics_cursor --daemon" 2>/dev/null || true
-setsid "$BIN_DIR/physics_cursor" --daemon </dev/null >/tmp/physics_cursor_daemon.log 2>&1 &
+pkill -f '(^|/)physics_cursor --daemon$' 2>/dev/null || true
+bash "$DIR/scripts/install_daemon_service.sh" --activate
 
 # Explicit session activation does not reload the entire compositor config.
 echo "[4/4] Activating the plugin in this session..."

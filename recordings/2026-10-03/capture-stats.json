@@ -1,0 +1,81 @@
+{
+  "app-transitions-physics": {},
+  "app-canvas-physics": {
+    "activeFps": 29.032258354838714,
+    "availableDiskSpace": 7046.59765625,
+    "averageFrameRenderTime": 14.590555,
+    "cpuUsage": 7.200647249190939,
+    "memoryUsage": 325.86328125,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 210,
+    "renderSkippedFrames": 260,
+    "renderTotalFrames": 30223,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  },
+  "app-canvas-sistema": {
+    "activeFps": 30.000000300000007,
+    "availableDiskSpace": 7046.6015625,
+    "averageFrameRenderTime": 14.497926,
+    "cpuUsage": 7.629870129870129,
+    "memoryUsage": 331.16796875,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 211,
+    "renderSkippedFrames": 254,
+    "renderTotalFrames": 29945,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  },
+  "app-zen-physics": {
+    "activeFps": 29.032258354838714,
+    "availableDiskSpace": 7046.6171875,
+    "averageFrameRenderTime": 20.894567,
+    "cpuUsage": 7.713651498335183,
+    "memoryUsage": 329.140625,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 211,
+    "renderSkippedFrames": 245,
+    "renderTotalFrames": 29668,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  },
+  "app-vscode-physics": {
+    "activeFps": 30.000000300000007,
+    "availableDiskSpace": 7046.59375,
+    "averageFrameRenderTime": 23.332572,
+    "cpuUsage": 8.904867256637168,
+    "memoryUsage": 328.625,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 211,
+    "renderSkippedFrames": 236,
+    "renderTotalFrames": 29398,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  },
+  "app-nautilus-physics": {
+    "activeFps": 30.000000300000007,
+    "availableDiskSpace": 7046.5546875,
+    "averageFrameRenderTime": 21.820557,
+    "cpuUsage": 7.5530586766541825,
+    "memoryUsage": 328.4375,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 181,
+    "renderSkippedFrames": 227,
+    "renderTotalFrames": 29127,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  },
+  "app-nautilus-sistema": {
+    "activeFps": 30.000000300000007,
+    "availableDiskSpace": 7046.546875,
+    "averageFrameRenderTime": 11.875647,
+    "cpuUsage": 2.543899882060018,
+    "memoryUsage": 328.203125,
+    "outputSkippedFrames": 0,
+    "outputTotalFrames": 181,
+    "renderSkippedFrames": 219,
+    "renderTotalFrames": 28886,
+    "webSocketSessionIncomingMessages": 6,
+    "webSocketSessionOutgoingMessages": 6
+  }
+}
