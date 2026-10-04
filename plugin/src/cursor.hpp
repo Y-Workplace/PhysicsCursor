@@ -16,6 +16,8 @@
 #include "highres.hpp"
 #include "../../src/CursorTransition.hpp"
 #include <vector>
+#include <unordered_map>
+#include "../../src/CursorImageIdentity.hpp"
 
 class CDynamicCursors {
   public:
@@ -78,6 +80,19 @@ class CDynamicCursors {
     bool transitionSoftware = false;
     double transitionElapsed() const;
     void beginTransition();
+    void beginTransition(ShapeLayer old);
+    void onCursorImageChanged();
+    ShapeLayer snapshotClientCursor();
+    CHyprSignalListener cursorChanged;
+    struct ClientImage {
+        std::vector<uint8_t> pixels;
+        Vector2D size, logicalSize, hotspot;
+        uint32_t format = 0, stride = 0;
+        uint64_t fingerprint = 0, shape = 0;
+        WP<Desktop::View::CWLSurface> surface;
+    } clientImage;
+    std::unordered_map<uint64_t, uint64_t> clientThemeFrames;
+    void indexClientThemeFrames();
     void endTransition();
 
     // modes

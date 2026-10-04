@@ -104,7 +104,7 @@ shake = { enabled = true, effects = true },
 
 ## Transição entre formatos de cursor
 
-Ao trocar entre formatos nomeados do tema (flecha, mão de link, texto, resize),
+Ao trocar entre formatos do tema (flecha, mão de link, texto, resize),
 o anterior desaparece encolhendo e girando 15°, enquanto o novo aparece com
 fade e uma curva elástica equivalente a `cubic-bezier(.34, 1.56, .64, 1)`.
 A transição fica **desativada por padrão** após a correção de inicialização.
@@ -116,7 +116,17 @@ continuam ativas, e ambas as imagens giram em torno da ponta de clique real.
 Durante a transição o plugin usa renderização por software; ao terminar,
 libera esse modo quando a ampliação ou outro recurso não o exigir. Trocas
 rápidas preservam as imagens ainda visíveis com um limite de quatro imagens
-anteriores. Cursores desenhados pelo próprio aplicativo não são animados.
+anteriores. Cursores enviados pelo aplicativo em superfícies Wayland também
+participam, inclusive por XWayland. O plugin identifica as imagens do tema
+XCursor carregado pelo Hyprland e agrupa os quadros de um cursor animado,
+para que um spinner não reinicie a transição a cada quadro. A imagem anterior
+é copiada antes da troca, preservando seu conteúdo quando a superfície é reutilizada.
+
+Cursores ARGB em memória compartilhada de até 512 × 512 pixels são suportados.
+Para imagens personalizadas que não correspondem ao tema carregado, uma troca
+na mesma superfície só inicia a transição se tamanho ou hotspot mudarem;
+o protocolo não informa se outros commits são novos formatos ou quadros de animação.
+Imagens fornecidas apenas pela GPU continuam usando a física sem transição.
 
 Para desativar, no bloco `plugin.dynamic_cursors` em Lua:
 
@@ -200,3 +210,14 @@ animação, ampliação e liberação das imagens e travas de renderização ao 
 O plugin auxiliar de inspeção existe somente no sandbox. A sessão principal e
 seu daemon continuam com suas configurações atuais. Se `grim` estiver instalado,
 o teste salva uma captura do cursor ampliado junto dos logs temporários.
+
+Para testar também superfícies de aplicativos Wayland e X11/XWayland:
+
+```bash
+python3 tests/plugin_lifecycle.py --surfaces
+```
+
+Este modo usa o tema Bibata-Modern-Ice instalado em `~/.local/share/icons`,
+um cliente SDL controlado e o DISPLAY da instância aninhada. Verifica a cópia
+da imagem anterior, trocas rápidas, quadros de cursor animado, desativação e
+ocultação do cursor, sem carregar o plugin na sessão principal.

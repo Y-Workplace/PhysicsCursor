@@ -1,9 +1,11 @@
-import os, pathlib, subprocess, tempfile, time, json, signal, argparse, shutil, shlex
+import re, os, pathlib, subprocess, tempfile, time, json, signal, argparse, shutil, shlex
 
 parser = argparse.ArgumentParser(description="Test plugin startup/reload/unload/shutdown in an isolated nested compositor")
 parser.add_argument("--plugin", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parents[1] / "plugin/out/dynamic-cursors.so")
+parser.add_argument("--surfaces", action="store_true", help="Exercise native Wayland and XWayland client cursor surfaces")
 parser.add_argument("--transitions", action="store_true", help="Build a private IPC bridge and exercise real cursor transitions")
 args = parser.parse_args()
+if args.surfaces: args.transitions = True
 plugin = str(args.plugin.resolve())
 if not pathlib.Path(plugin).is_file():
     raise SystemExit("Build the plugin first: bash build.sh")
@@ -18,6 +20,8 @@ base=pathlib.Path(tempfile.mkdtemp(prefix='pc-'))
 runtime=base/'r'; runtime.mkdir(mode=0o700)
 cache=base/'cache'; cache.mkdir()
 config=base/'test.lua'
+client_proc = None
+client_path = None
 daemon_path = None
 probe_path = None
 if args.transitions:
@@ -45,7 +49,11 @@ if args.transitions:
                     *probe_flags, "-I/usr/include/hyprland/src", "-I"+str(private_root / "plugin/src"),
                     "-I"+str(base), str(root / "tests/transition_probe.cpp"), "-o", str(probe_path)], check=True)
 
-config.write_text('hl.monitor({output="", mode="preferred", position="auto", scale=1})\nhl.plugin.load('+json.dumps(plugin)+')\nhl.config({debug={enable_stdout_logs=true,disable_logs=false},plugin={dynamic_cursors={enabled=true,mode="tilt",threshold=0,shake={threshold=1000000},transition={enabled=' + ('true' if args.transitions else 'false') + '}}}})\n')
+if args.surfaces:
+    client_path = base / "surface-client"
+    subprocess.run(["g++", "-std=c++20", *cflags, str(root / "tests/cursor_surface_client.cpp"),
+                    "-o", str(client_path), *libs], check=True)
+config.write_text('hl.env("XCURSOR_THEME","Bibata-Modern-Ice")\nhl.env("XCURSOR_SIZE","24")\nhl.monitor({output="", mode="preferred", position="auto", scale=1})\nhl.plugin.load('+json.dumps(plugin)+')\nhl.config({debug={enable_stdout_logs=true,disable_logs=false},plugin={dynamic_cursors={enabled=true,mode="tilt",threshold=0,shake={threshold=1000000},transition={enabled=' + ('true' if args.transitions else 'false') + '}}}})\n')
 env=os.environ.copy()
 env.pop("HYPRLAND_INSTANCE_SIGNATURE", None)
 env.update(XDG_RUNTIME_DIR=str(runtime),XDG_CACHE_HOME=str(cache),XDG_CONFIG_HOME=str(base/'config'),WAYLAND_DISPLAY=str(outer_socket),AQ_DRM_DEVICES='/dev/nonexistent',HYPRLAND_NO_SD_VARS='1',HYPRLAND_NO_SD_NOTIFY='1',DBUS_SESSION_BUS_ADDRESS='')
@@ -91,8 +99,8 @@ with log.open('w') as out:
         print('Nested startup, three reload/unload/load cycles passed.')
         if args.transitions:
             ctl('plugin', 'load', str(probe_path))
-            def shape(name, x=160, delay=0):
-                ctl('dispatch', 'hl.plugin.physics_cursor_test.shape('+json.dumps(name)+','+str(x)+')', delay=delay)
+            def shape(name, x=160, delay=0, y=160):
+                ctl('dispatch', 'hl.plugin.physics_cursor_test.shape('+json.dumps(name)+','+str(x)+','+str(y)+')', delay=delay)
                 return json.loads(test_state.read_text())
             def state(): return shape('state')
             def require(ok, msg):
@@ -130,6 +138,98 @@ with log.open('w') as out:
                     'Magnified transition failed to return to hardware state: '+str(settled))
             require(daemon_proc.poll() is None, 'Private physics daemon exited')
             print('Real default/pointer/text transitions, 20 rapid reversals, mid-animation disable and magnification passed.')
+            if args.surfaces:
+                theme = pathlib.Path.home() / ".local/share/icons/Bibata-Modern-Ice"
+                require(theme.is_dir(), "Surface test needs installed Bibata-Modern-Ice")
+                for driver in ("wayland", "x11"):
+                    command = base / (driver + ".command")
+                    command.write_text("left_ptr")
+                    clientenv = testenv.copy()
+                    clientenv["SDL_VIDEODRIVER"] = driver
+                    if driver == "x11":
+                        # This compositor's DISPLAY, never the outer session's :0.
+                        display = re.search(r'XWayland found a suitable display socket at DISPLAY: (:[0-9]+)', log.read_text())
+                        require(display is not None, 'Nested XWayland DISPLAY was not published')
+                        clientenv['DISPLAY'] = display.group(1)
+                    clientlog = (base / (driver + "-client.log")).open('w')
+                    client_proc = subprocess.Popen([str(client_path), str(command), str(theme)], env=clientenv,
+                                                   stdout=clientlog, stderr=subprocess.STDOUT)
+                    try:
+                        for _ in range(50):
+                            clients = json.loads(ctl('-j', 'clients', delay=.05))
+                            own_clients = [c for c in clients if c['pid'] == client_proc.pid]
+                            if own_clients: break
+                            require(client_proc.poll() is None, 'Client exited: ' + (base / (driver + "-client.log")).read_text())
+                        require(bool(own_clients), 'Client window did not map')
+                        time.sleep(.4)
+                        clients = json.loads(ctl('-j', 'clients', delay=0))
+                        own = next(c for c in clients if c['pid'] == client_proc.pid)
+                        center_x = own['at'][0] + own['size'][0] / 2
+                        center_y = own['at'][1] + own['size'][1] / 2
+                        shape('warp', center_x, y=center_y, delay=.4)
+                        initial = state()
+                        require(initial['surface'] and initial['client_shape'] != 0,
+                                driver + ': theme surface was not classified: ' + str(initial))
+                        def client_shape(name, delay=.05):
+                            previous = state()
+                            command.write_text(name)
+                            ack = pathlib.Path(str(command) + '.ack')
+                            deadline = time.monotonic() + 2
+                            while not ack.exists() or ack.read_text() != name:
+                                require(client_proc.poll() is None, 'Surface client exited')
+                                require(time.monotonic() < deadline, 'Surface client did not process command ' + name)
+                                time.sleep(.005)
+                            time.sleep(delay)
+                            require(client_proc.poll() is None, 'Surface client exited')
+                            current = state()
+                            deadline = time.monotonic() + 2
+                            while ((name == 'hide' and (current['active'] or current['client_hash'] != 0)) or
+                                   (name != 'hide' and not name.startswith('watch:') and
+                                    current['client_hash'] == previous['client_hash'])):
+                                require(time.monotonic() < deadline, 'Cursor commit did not reach compositor: ' + name)
+                                time.sleep(.01)
+                                current = state()
+                            return current
+                        previous_hash = initial['client_hash']
+                        for name in ('hand2', 'xterm', 'left_ptr'):
+                            current = client_shape(name)
+                            require(current['active'] and current['layers'] > 0,
+                                    driver + ': surface transition missing: ' + str(current))
+                            require(current['outgoing_hash'] == previous_hash,
+                                    driver + ': outgoing surface image was overwritten: ' + str(current))
+                            previous_hash = current['client_hash']
+                            time.sleep(.35)
+                            ended = state()
+                            require(not ended['active'] and ended['layers'] == 0 and ended['locks'] == 0,
+                                    driver + ': surface transition leaked: ' + str(ended))
+                        for i in range(12):
+                            current = client_shape('hand2' if i % 2 == 0 else 'xterm', .03)
+                            require(current['active'] and 0 < current['layers'] <= 4,
+                                    driver + ': rapid surface changes failed: ' + str(current))
+                        client_shape('watch:0', .4)
+                        before = state()
+                        require(before['client_shape'] != 0, 'Watch not classified')
+                        for frame in (1, 2, 3, 0):
+                            current = client_shape('watch:' + str(frame))
+                            require(not current['active'] and current['client_shape'] == before['client_shape'],
+                                    driver + ': animation frame restarted transition: ' + str(current))
+                        client_shape('hand2', .05)
+                        ctl('eval', 'hl.config({plugin={dynamic_cursors={transition={enabled=false}}}})', delay=.05)
+                        disabled = state()
+                        require(not disabled['active'] and disabled['layers'] == 0 and disabled['locks'] == 0,
+                                driver + ': disabling surface transition leaked state: ' + str(disabled))
+                        ctl('eval', 'hl.config({plugin={dynamic_cursors={transition={enabled=true}}}})', delay=.05)
+                        client_shape('left_ptr', .4)
+                        client_shape('xterm', .05)
+                        hidden = client_shape('hide', .05)
+                        require(not hidden['active'] and hidden['layers'] == 0 and hidden['locks'] == 0,
+                                driver + ': hiding cursor leaked state: ' + str(hidden))
+                        print(driver + ': theme surfaces, rapid changes, animation frames, disable and hide passed.', flush=True)
+                    finally:
+                        if client_proc.poll() is None:
+                            client_proc.terminate(); client_proc.wait(timeout=5)
+                        clientlog.close()
+                        client_proc = None
             ctl('plugin','unload',str(probe_path))
         print(ctl('getoption','plugin:dynamic-cursors:transition:enabled'))
         ctl('eval','hl.config({plugin={dynamic_cursors={transition={enabled=true}}}})')
@@ -145,6 +245,8 @@ with log.open('w') as out:
             os.killpg(proc.pid,signal.SIGTERM)
             try: proc.wait(timeout=5)
             except subprocess.TimeoutExpired: os.killpg(proc.pid,signal.SIGKILL); proc.wait()
+        if client_proc and client_proc.poll() is None:
+            client_proc.terminate(); client_proc.wait(timeout=5)
         if daemon_proc and daemon_proc.poll() is None:
             daemon_proc.terminate()
             try: daemon_proc.wait(timeout=5)

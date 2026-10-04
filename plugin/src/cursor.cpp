@@ -41,11 +41,15 @@ void tickRaw(SP<CEventLoopTimer> self, void* data) {
 
 CDynamicCursors::CDynamicCursors() {
     shapeName = g_pHyprRenderer->m_lastCursorData.name;
+    indexClientThemeFrames();
+    cursorChanged = Pointer::mgr()->m_events.cursorChanged.listen([this] { onCursorImageChanged(); });
+    onCursorImageChanged();
     this->tick = SP<CEventLoopTimer>(new CEventLoopTimer(std::chrono::microseconds(500), tickRaw, nullptr));
     g_pEventLoopManager->addTimer(this->tick);
 }
 
 CDynamicCursors::~CDynamicCursors() {
+    cursorChanged.reset();
     // stop and deallocate timer
     g_pEventLoopManager->removeTimer(this->tick);
     this->tick.reset();
@@ -399,8 +403,10 @@ void CDynamicCursors::setShape(const std::string& shape) {
 }
 
 void CDynamicCursors::unsetShape() {
-    // Client-rendered surfaces have no stable named theme image to retain.
-    endTransition();
+    // Capture a named cursor before the client surface replaces it. Repeated
+    // set_cursor calls on client surfaces are observed through cursorChanged.
+    if (shapeName != "clientside" && !shapeName.empty() && CONFIG(transitionEnabled))
+        beginTransition();
     shapeName = "clientside";
     g_pConfigHandler->m_shapeRules->activate(shapeName);
     highres.loadShape(shapeName);
@@ -408,6 +414,8 @@ void CDynamicCursors::unsetShape() {
 
 void CDynamicCursors::updateTheme() {
     endTransition();
+    clientImage = {};
+    indexClientThemeFrames();
     highres.update();
 }
 
@@ -525,30 +533,129 @@ double CDynamicCursors::transitionElapsed() const {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - transitionStart).count();
 }
 
-void CDynamicCursors::beginTransition() {
+void CDynamicCursors::indexClientThemeFrames() {
+    clientThemeFrames.clear();
+    auto* manager = Pointer::Cursor::mgr()->m_xcursor.get();
+    if (!manager) return;
+    for (const auto& cursor : manager->m_cursors) {
+        if (!cursor || cursor->images.empty()) continue;
+        const auto fingerprint = [](const SXCursorImage& frame) {
+            return cursorImageFingerprint(
+                {reinterpret_cast<const uint8_t*>(frame.pixels.data()), frame.pixels.size() * 4},
+                frame.size.x, frame.size.y, unsigned(frame.size.x) * 4);
+        };
+        const auto identity = fingerprint(cursor->images.front());
+        if (!identity) continue;
+        for (const auto& frame : cursor->images)
+            if (auto hash = fingerprint(frame)) clientThemeFrames.try_emplace(hash, identity);
+    }
+}
+
+CDynamicCursors::ShapeLayer CDynamicCursors::snapshotClientCursor() {
+    ShapeLayer old;
+    if (clientImage.pixels.empty()) return old;
+    // The client's live texture may be updated in place on the next commit.
+    old.texture = g_pHyprRenderer->createTexture(clientImage.format, clientImage.pixels.data(),
+                                                clientImage.stride, clientImage.size, true);
+    old.size = clientImage.logicalSize;
+    old.hotspot = clientImage.hotspot;
+    return old;
+}
+
+void CDynamicCursors::onCursorImageChanged() {
     auto* pointers = Pointer::mgr().get();
-    if (!pointers->hasCursor() || pointers->m_currentCursorImage.surface) {
+    const auto& image = pointers->m_currentCursorImage;
+    if (!g_pConfigHandler->isEnabled() || !CONFIG(transitionEnabled) || !pointers->hasCursor()) {
+        clientImage = {};
         endTransition();
         return;
     }
+    if (!image.surface) {
+        clientImage = {};
+        return; // Named shapes are handled before setCursorFromName replaces them.
+    }
+    auto surface = image.surface.lock();
+    auto resource = surface->resource();
     auto texture = pointers->getCurrentCursorTexture();
-    if (!texture) return;
-    const double elapsed = transitionSoftware ? transitionElapsed() : transitionDuration;
-    for (auto& old : outgoingShapes)
-        old.start = cursorTransitionFrame(elapsed, transitionDuration, false, old.start);
-    std::erase_if(outgoingShapes, [](const auto& old) { return old.start.opacity < .01; });
+    if (!texture || !resource || !resource->m_role || resource->m_role->role() != SURFACE_ROLE_CURSOR) return;
+    const auto& pixels = CCursorSurfaceRole::cursorPixelData(resource);
+    // set_cursor can precede the first commit carrying SHM pixels. Keep the
+    // previous snapshot until that commit instead of treating it as a hide.
+    if (pixels.empty()) return;
+    const int width = image.size.x, height = image.size.y;
+    // Only CPU-backed ARGB cursors can be snapshotted without blocking GPU readback.
+    // Hyprland's synchronous surface textures can leave m_drmFormat unset.
+    // Prefer the SHM attributes while the committed buffer is still available.
+    uint32_t format = texture->m_drmFormat;
+    if (resource->m_current.buffer) {
+        const auto attrs = resource->m_current.buffer->shm();
+        if (!attrs.success) { clientImage = {}; endTransition(); return; }
+        format = attrs.format;
+    }
+    if (!format) format = DRM_FORMAT_ARGB8888; // same fallback as Hyprland's CPU cursor path
+    if (width <= 0 || height <= 0 || width > 512 || height > 512 || texture->isDMA() ||
+        format != DRM_FORMAT_ARGB8888 || pixels.size() > 4 * 1024 * 1024 || pixels.size() % height) {
+        clientImage = {};
+        endTransition();
+        return;
+    }
+    const unsigned stride = pixels.size() / height;
+    const auto hash = cursorImageFingerprint(pixels, width, height, stride);
+    if (!hash) {
+        clientImage = {};
+        endTransition();
+        return;
+    }
+    const auto match = clientThemeFrames.find(hash);
+    const uint64_t shape = match == clientThemeFrames.end() ? 0 : match->second;
+    const auto logicalSize = image.size / image.scale;
+    const bool geometryChanged = clientImage.logicalSize != logicalSize || clientImage.hotspot != image.hotspot;
+    const bool changed = !clientImage.pixels.empty() &&
+        ((shape && clientImage.shape && shape != clientImage.shape) ||
+         (hash != clientImage.fingerprint && (!shape || !clientImage.shape) &&
+          (geometryChanged || clientImage.surface != surface)));
+    if (changed) beginTransition(snapshotClientCursor());
+    // Unknown same-surface frames are left alone: Wayland supplies no shape name,
+    // so animating every commit would restart busy/spinner animations indefinitely.
+    clientImage.pixels = pixels;
+    clientImage.size = image.size;
+    clientImage.logicalSize = logicalSize;
+    clientImage.hotspot = image.hotspot;
+    clientImage.format = format;
+    clientImage.stride = stride;
+    clientImage.fingerprint = hash;
+    clientImage.shape = shape;
+    clientImage.surface = surface;
+}
 
+void CDynamicCursors::beginTransition() {
+    auto* pointers = Pointer::mgr().get();
+    if (!pointers->hasCursor()) { endTransition(); return; }
+    if (pointers->m_currentCursorImage.surface) {
+        beginTransition(snapshotClientCursor());
+        return;
+    }
     ShapeLayer old;
-    old.texture = texture;
+    old.texture = pointers->getCurrentCursorTexture();
     old.size = pointers->m_currentCursorImage.size / pointers->m_currentCursorImage.scale;
     old.hotspot = pointers->m_currentCursorImage.hotspot;
-    old.start = transitionSoftware ? cursorTransitionFrame(elapsed, transitionDuration, true) : CursorTransitionFrame{};
     if (resultShown.scale > 1 && highres.getTexture() && highres.getBuffer()) {
         old.texture = highres.getTexture();
         auto buffer = highres.getBuffer();
         old.hotspot = {buffer->m_hotspot.x / buffer->size.x * old.size.x,
                        buffer->m_hotspot.y / buffer->size.y * old.size.y};
     }
+    beginTransition(old);
+}
+
+void CDynamicCursors::beginTransition(ShapeLayer old) {
+    if (!old.texture) return;
+    auto* pointers = Pointer::mgr().get();
+    const double elapsed = transitionSoftware ? transitionElapsed() : transitionDuration;
+    for (auto& layer : outgoingShapes)
+        layer.start = cursorTransitionFrame(elapsed, transitionDuration, false, layer.start);
+    std::erase_if(outgoingShapes, [](const auto& layer) { return layer.start.opacity < .01; });
+    old.start = transitionSoftware ? cursorTransitionFrame(elapsed, transitionDuration, true) : CursorTransitionFrame{};
     outgoingShapes.push_back(old);
     // Retain a small bounded set for interrupted transitions on rapid hover.
     if (outgoingShapes.size() > 4) outgoingShapes.erase(outgoingShapes.begin());

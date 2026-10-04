@@ -1,6 +1,8 @@
 #include "BuildAction.hpp"
 #include "CursorEffects.hpp"
 #include "CursorTransition.hpp"
+#include "CursorImageIdentity.hpp"
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <thread>
@@ -110,6 +112,26 @@ static void testShapeTransition() {
             "Interrupted transition lost opacity");
 }
 
+static void testCursorImageIdentity() {
+    std::array<uint32_t, 4> image{0xff112233, 0, 0x80102030, 0};
+    const auto fingerprint = [](const auto& pixels, int w, int h, unsigned stride) {
+        return cursorImageFingerprint({reinterpret_cast<const uint8_t*>(pixels.data()), pixels.size() * 4}, w, h, stride);
+    };
+    const auto original = fingerprint(image, 2, 2, 8);
+    require(original != 0, "Visible cursor has no identity");
+    std::array<uint32_t, 16> padded{};
+    padded[5] = image[0]; padded[9] = image[2];
+    require(fingerprint(padded, 4, 4, 16) == original, "XWayland padding changed cursor identity");
+    image[1] = 0x00123456;
+    require(fingerprint(image, 2, 2, 8) == original, "Invisible RGB changed cursor identity");
+    image[2] ^= 1;
+    require(fingerprint(image, 2, 2, 8) == original, "Premultiplied edge rounding changed cursor identity");
+    image[0] ^= 1;
+    require(fingerprint(image, 2, 2, 8) != original, "Visible cursor change was missed");
+    require(fingerprint(image, 2, 2, 4) == 0 && fingerprint(image, 2, 3, 8) == 0,
+            "Truncated cursor pixels were read");
+}
+
 static void testBuildExport() {
     namespace fs = std::filesystem;
     char name[] = "/tmp/physics-cursor-export-XXXXXX";
@@ -150,6 +172,7 @@ int main() {
         testPhysics();
         testMagnifiedPhysics();
         testShapeTransition();
+        testCursorImageIdentity();
         testBuildExport();
         std::cout << "Physics, magnification, transitions and playground export tests passed.\n";
         return 0;
