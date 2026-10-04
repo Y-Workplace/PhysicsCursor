@@ -1,17 +1,17 @@
-# Objetos e temporários de compilação
+# Object files and temporary build files
 *.o
 *.a
 *.so
 !bin/*.so
 *.log
 
-# Diretórios de build intermediários
+# Intermediate build directories
 plugin/out/
 out/
 build/
 .cache/
 
-# Executáveis gerados localmente (mantendo os de bin/)
+# Locally generated executables (keep files in bin/)
 /physics_cursor
 !bin/physics_cursor
 

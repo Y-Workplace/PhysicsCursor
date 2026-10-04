@@ -252,7 +252,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         g_pDynamicCursors->updateTheme();
     });
 
-    return {"dynamic-cursors", "a plugin to make your hyprland cursor more realistic, also adds shake to find", "Virt", "0.1"};
+    return {"dynamic-cursors", "Cursor physics, shake magnification, and animated shape transitions for Hyprland", "Virt", "0.1.1"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {

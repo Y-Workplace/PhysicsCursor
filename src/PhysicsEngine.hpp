@@ -15,7 +15,7 @@ struct Vector2D {
 
     float lengthSq() const { return x * x + y * y; }
     float length() const { return std::sqrt(lengthSq()); }
-    
+
     Vector2D normalized() const {
         float l = length();
         return (l > 0.0001f) ? (*this / l) : Vector2D{0, 0};
@@ -46,24 +46,24 @@ public:
     float inertiaInfluence = PhysicsDefaults::inertiaInfluence;
     float maxDeflectionDeg = PhysicsDefaults::maxDeflectionDeg;
 
-    // Estado do Pivô (Ponto de Evento do Cursor no pixel exato)
+    // Pivot state (cursor event hotspot at the exact pixel)
     Vector2D pivotPos{640.0f, 360.0f};
     Vector2D velocity{0.0f, 0.0f};
     Vector2D acceleration{0.0f, 0.0f};
 
-    // Dinâmica Angular em Torno do Pivô (0.0 rad = repouso original)
+    // Angular dynamics around the pivot (0.0 rad = original rest position)
     float angle = 0.0f;
     float angularVelocity = 0.0f;
     float angularAccel = 0.0f;
 
-    // Telemetria
+    // Telemetry
     float inertiaTorque = 0.0f;
     float dragTorque = 0.0f;
     float springTorque = 0.0f;
     float dampingTorque = 0.0f;
     float totalTorque = 0.0f;
 
-    // Rastro
+    // Trail
     std::deque<TrailPoint> trail;
     static constexpr size_t MAX_TRAIL_POINTS = 24;
 
@@ -72,9 +72,9 @@ private:
     Vector2D lastFilteredVel{0.0f, 0.0f};
     bool isInitialized = false;
 
-    // Acumulador de passo fixo para independência total de taxa de quadros (FPS)
+    // Fixed-step accumulator for frame-rate independence
     float accumulator = 0.0f;
-    static constexpr float FIXED_DT = 0.002f; // Passo fixo de 500 Hz (2 milissegundos)
+    static constexpr float FIXED_DT = 0.002f; // Fixed step at 500 Hz (2 milliseconds)
 
 public:
     PhysicsEngine() {
@@ -110,7 +110,7 @@ public:
 
     void update(float dt) {
         if (dt <= 0.00001f) return;
-        if (dt > 0.1f) dt = 0.1f; // Limita saltos grandes ao arrastar janela
+        if (dt > 0.1f) dt = 0.1f; // Clamp large time steps while dragging the window
 
         if (!isInitialized) {
             lastPivotPos = pivotPos;
@@ -118,11 +118,11 @@ public:
             return;
         }
 
-        // 1. Cinemática Linear com Filtro Contínuo Independente de FPS
+        // 1. Linear kinematics with a frame-rate-independent continuous filter
         Vector2D rawVel = (pivotPos - lastPivotPos) / dt;
         lastPivotPos = pivotPos;
 
-        // Coeficiente de decaimento temporal contínuo: exp(-frequencia * dt)
+        // Continuous time-decay coefficient: exp(-frequency * dt)
         float velDecay = std::exp(-20.0f * dt);
         velocity = velocity * velDecay + rawVel * (1.0f - velDecay);
 
@@ -132,18 +132,18 @@ public:
         float accelDecay = std::exp(-16.0f * dt);
         acceleration = acceleration * accelDecay + rawAccel * (1.0f - accelDecay);
 
-        // 2. Acumulador de Passo Fixo (Garante 100% de Independência de FPS)
-        // Não importa se a tela roda a 60, 120, 144, 240 Hz ou com sleep do daemon:
-        // cada microssegundo é integrado na mesma fatia idêntica de 2ms (FIXED_DT)
+        // 2. Fixed-step accumulator (ensures frame-rate independence)
+        // Whether the display runs at 60, 120, 144, 240 Hz, or the daemon sleeps:
+        // all elapsed time is integrated in identical 2 ms steps (FIXED_DT)
         accumulator += dt;
-        if (accumulator > 0.05f) accumulator = 0.05f; // Evita espiral de acumulação
+        if (accumulator > 0.05f) accumulator = 0.05f; // Prevent an accumulator spiral
 
         while (accumulator >= FIXED_DT) {
             integrateFixedStep(FIXED_DT);
             accumulator -= FIXED_DT;
         }
 
-        // 3. Atualização do Rastro
+        // 3. Update the trail
         float speed = velocity.length();
         if (speed > 35.0f || std::abs(angularVelocity) > 0.35f) {
             trail.push_front({pivotPos, angle, 1.0f});
@@ -164,17 +164,17 @@ public:
 
 private:
     void integrateFixedStep(float fixedDt) {
-        // Torques físicos exatamente como calibrados pelo usuário:
+        // Physical torques as calibrated by the user:
         dragTorque = velocity.x * velocityInfluence * springK;
         inertiaTorque = -acceleration.x * inertiaInfluence * springK * mass;
 
         float diagonalComp = (velocity.x - velocity.y * 0.25f) * (velocityInfluence * 0.20f * springK);
         float externalTorque = dragTorque * 0.85f + diagonalComp * 0.15f + inertiaTorque;
 
-        // Mola Harmônica Restauradora: -k * theta
+        // Restoring harmonic spring: -k * theta
         springTorque = -springK * angle;
 
-        // Amortecimento Viscoso Linear Suave: -gamma * omega
+        // Smooth linear viscous damping: -gamma * omega
         dampingTorque = -damping * angularVelocity;
 
         totalTorque = externalTorque + springTorque + dampingTorque;
@@ -182,11 +182,11 @@ private:
         float I = mass * 1.0f;
         angularAccel = totalTorque / I;
 
-        // Integração Semi-Implícita de Euler
+        // Semi-implicit Euler integration
         angularVelocity += angularAccel * fixedDt;
         angle += angularVelocity * fixedDt;
 
-        // Limite de segurança angular
+        // Angular safety limit
         float maxRad = maxDeflectionDeg * (float)(M_PI / 180.0);
         if (angle > maxRad) {
             angle = maxRad;
@@ -196,7 +196,7 @@ private:
             if (angularVelocity < 0.0f) angularVelocity = 0.0f;
         }
 
-        // Repouso imperceptível apenas quando virtualmente parado
+        // Snap to rest only when motion is negligible
         if (velocity.length() < 2.0f && std::abs(angle) < 0.002f && std::abs(angularVelocity) < 0.02f) {
             angle *= 0.96f;
             angularVelocity *= 0.96f;

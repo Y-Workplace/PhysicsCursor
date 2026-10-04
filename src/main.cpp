@@ -39,17 +39,17 @@ int main(int argc, char* argv[]) {
 
     BridgeServer bridgeServer;
     if (!bridgeServer.init(isDaemonMode)) {
-        std::cerr << "[PhysicsCursor] Falha ao inicializar ponte de comunicacao IPC." << std::endl;
+        std::cerr << "[PhysicsCursor] Failed to initialize the IPC bridge." << std::endl;
         return 1;
     }
 
     PhysicsEngine physics;
 
     // ==========================================
-    // 1. MODO DAEMON (SEGUNDO PLANO SEM JANELA)
+    // 1. DAEMON MODE (BACKGROUND, NO WINDOW)
     // ==========================================
     if (isDaemonMode) {
-        std::cout << "[PhysicsCursor] Modo Daemon ativo. Publicando fisica no Hyprland via SHM (500 Hz)..." << std::endl;
+        std::cout << "[PhysicsCursor] Daemon mode active. Publishing physics to Hyprland through SHM (500 Hz)..." << std::endl;
         using Clock = std::chrono::steady_clock;
         constexpr auto interval = std::chrono::microseconds(2000);
         auto lastTime = Clock::now();
@@ -74,15 +74,15 @@ int main(int argc, char* argv[]) {
             std::this_thread::sleep_until(nextTick);
         }
 
-        std::cout << "[PhysicsCursor] Daemon encerrado com seguranca." << std::endl;
+        std::cout << "[PhysicsCursor] Daemon shut down safely." << std::endl;
         return 0;
     }
 
     // ==========================================
-    // 2. MODO INTERATIVO / GUI (SIMULADOR VISUAL)
+    // 2. INTERACTIVE / GUI MODE (VISUAL SIMULATOR)
     // ==========================================
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        std::cerr << "Erro fatal ao inicializar SDL3: " << SDL_GetError() << std::endl;
+        std::cerr << "Failed to initialize SDL3: " << SDL_GetError() << std::endl;
         return 1;
     }
 
@@ -95,18 +95,18 @@ int main(int argc, char* argv[]) {
         winFlags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
     }
 
-    SDL_Window* window = SDL_CreateWindow("PhysicsCursor - Simulation & Playground", 
+    SDL_Window* window = SDL_CreateWindow("PhysicsCursor - Simulation & Playground",
                                           windowWidth, windowHeight, winFlags);
 
     if (!window) {
-        std::cerr << "Erro ao criar janela SDL3: " << SDL_GetError() << std::endl;
+        std::cerr << "Failed to create the SDL3 window: " << SDL_GetError() << std::endl;
         SDL_Quit();
         return 1;
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!renderer) {
-        std::cerr << "Erro ao criar renderizador SDL3: " << SDL_GetError() << std::endl;
+        std::cerr << "Failed to create the SDL3 renderer: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
 
     bool isLeftMouseDown = false;
 
-    std::cout << "[PhysicsCursor] Simulacao pronta. Pressione L para alternar idioma (EN/PT)." << std::endl;
+    std::cout << "[PhysicsCursor] Playground ready. Press H to toggle the HUD." << std::endl;
 
     while (g_running.load()) {
         SDL_Event event;
@@ -166,8 +166,7 @@ int main(int argc, char* argv[]) {
                         buildAction.start(physics);
                     } else if (key == SDLK_C) {
                         cursorRend.useSystemCursor = !cursorRend.useSystemCursor;
-                    } else if (key == SDLK_L) {
-                        hud.toggleLanguage();
+
                     } else if (key == SDLK_1) {
                         physics.velocityInfluence = std::max(0.0002f, physics.velocityInfluence - 0.0002f);
                     } else if (key == SDLK_2) {
@@ -270,6 +269,6 @@ int main(int argc, char* argv[]) {
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    std::cout << "[PhysicsCursor] Simulacao finalizada." << std::endl;
+    std::cout << "[PhysicsCursor] Playground closed." << std::endl;
     return 0;
 }

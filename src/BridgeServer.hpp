@@ -17,7 +17,7 @@ public:
     bool init(bool asDaemon = false) {
         isDaemonMode = asDaemon;
 
-        // 1. Verifica se já existe um segmento ativo com daemon rodando
+        // 1. Check for an existing shared-memory segment with a running daemon
         int existingFd = shm_open(PHYSICS_CURSOR_SHM_NAME, O_RDWR, 0666);
         if (existingFd >= 0) {
             void* ptr = mmap(nullptr, sizeof(SharedCursorBridge), PROT_READ | PROT_WRITE, MAP_SHARED, existingFd, 0);
@@ -31,23 +31,23 @@ public:
 
                 if (daemonRunning) {
                     if (isDaemonMode) {
-                        // Novo daemon assumindo a ponte
+                        // New daemon taking ownership of the bridge
                         bridge = existingBridge;
                         shmFd = existingFd;
                         isOwner = true;
                         bridge->lastHeartbeatMs.store(now, std::memory_order_relaxed);
                         bridge->isDaemonActive.store(true, std::memory_order_relaxed);
-                        std::cout << "[BridgeServer] Daemon assumiu segmento existente (" 
+                        std::cout << "[BridgeServer] Daemon took ownership of the existing segment ("
                                   << PHYSICS_CURSOR_SHM_NAME << ")." << std::endl;
                         return true;
                     } else {
-                        // Processo GUI/Simulação: conecta em modo cliente/observador
-                        // NÃO é dono do ciclo de vida, não destruirá a memória ao fechar a janela
+                        // GUI/playground process: connect as a client/observer
+                        // Does not own the lifecycle or destroy shared memory when the window closes
                         bridge = existingBridge;
                         shmFd = existingFd;
                         isOwner = false;
-                        std::cout << "[BridgeServer] Daemon em segundo plano ativo detectado. "
-                                  << "GUI conectada como observador (o cursor do sistema permanecera ativo ao fechar)." << std::endl;
+                        std::cout << "[BridgeServer] Running background daemon detected. "
+                                  << "GUI connected as an observer (the system cursor stays active when the window closes)." << std::endl;
                         return true;
                     }
                 }
@@ -56,15 +56,15 @@ public:
             close(existingFd);
         }
 
-        // 2. Se nenhum daemon ativo existe, cria o segmento
+        // 2. Create the segment if no active daemon exists
         shmFd = shm_open(PHYSICS_CURSOR_SHM_NAME, O_CREAT | O_RDWR, 0666);
         if (shmFd < 0) {
-            std::cerr << "[BridgeServer] Falha ao criar shm_open: " << errno << std::endl;
+            std::cerr << "[BridgeServer] shm_open failed: " << errno << std::endl;
             return false;
         }
 
         if (ftruncate(shmFd, sizeof(SharedCursorBridge)) != 0) {
-            std::cerr << "[BridgeServer] Falha no ftruncate: " << errno << std::endl;
+            std::cerr << "[BridgeServer] ftruncate failed: " << errno << std::endl;
             close(shmFd);
             shmFd = -1;
             return false;
@@ -72,14 +72,14 @@ public:
 
         void* ptr = mmap(nullptr, sizeof(SharedCursorBridge), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
         if (ptr == MAP_FAILED || ptr == nullptr) {
-            std::cerr << "[BridgeServer] Falha no mmap: " << errno << std::endl;
+            std::cerr << "[BridgeServer] mmap failed: " << errno << std::endl;
             close(shmFd);
             shmFd = -1;
             return false;
         }
 
         bridge = static_cast<SharedCursorBridge*>(ptr);
-        isOwner = isDaemonMode; // Somente daemon gerencia remoção total
+        isOwner = isDaemonMode; // Only the daemon manages final removal
 
         bridge->magic = PHYSICS_BRIDGE_MAGIC;
         bridge->version = 1;
@@ -87,14 +87,14 @@ public:
         bridge->lastHeartbeatMs.store(getNowMs(), std::memory_order_relaxed);
         bridge->isDaemonActive.store(true, std::memory_order_relaxed);
 
-        std::cout << "[BridgeServer] Memoria compartilhada ativada: " 
-                  << PHYSICS_CURSOR_SHM_NAME << (isOwner ? " (Dono Daemon)" : " (Modo Standalone)") << std::endl;
+        std::cout << "[BridgeServer] Shared memory initialized: "
+                  << PHYSICS_CURSOR_SHM_NAME << (isOwner ? " (Daemon owner)" : " (Standalone mode)") << std::endl;
         return true;
     }
 
     void publish(float angle) {
         if (!bridge) return;
-        // Se a GUI estiver aberta e um daemon já estiver rodando, a GUI não sobrescreve a rotação do sistema
+        // The GUI must not overwrite system rotation while a daemon is running
         if (!isDaemonMode && !isOwner) return;
 
         bridge->rotationAngle.store(angle, std::memory_order_relaxed);
@@ -130,10 +130,10 @@ public:
             close(shmFd);
             shmFd = -1;
         }
-        // Somente o dono real do daemon desvincula a memória compartilhada
+        // Only the owning daemon unlinks shared memory
         if (isOwner) {
             shm_unlink(PHYSICS_CURSOR_SHM_NAME);
-            std::cout << "[BridgeServer] Segmento SHM desvinculado pelo daemon." << std::endl;
+            std::cout << "[BridgeServer] SHM segment unlinked by the daemon." << std::endl;
         }
     }
 

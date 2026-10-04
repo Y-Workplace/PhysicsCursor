@@ -7,12 +7,12 @@
 
 class CursorRenderer {
 public:
-    bool useSystemCursor = true;    // Se true, usa o cursor real do sistema
-    float cursorScale = 1.0f;       // Escala 1.0 = tamanho nativo 1:1 original (ex: 24px)
-    bool showPhysicsVectors = true; // Mostrar vetores de velocidade e aceleração
-    bool showPivotPoint = true;     // Mostrar ponto do pivô vermelho no primeiro pixel
-    bool showTrail = true;          // Mostrar rastro suave inercial
-    bool showAngleArc = true;       // Mostrar arco de balanço angular
+    bool useSystemCursor = true;    // Use the actual system cursor when true
+    float cursorScale = 1.0f;       // Scale 1.0 = original native size (e.g. 24 px)
+    bool showPhysicsVectors = true; // Show velocity and acceleration vectors
+    bool showPivotPoint = true;     // Show the red pivot point at the first pixel
+    bool showTrail = true;          // Show the smooth inertial trail
+    bool showAngleArc = true;       // Show the angular sway arc
 
     SystemCursorData sysCursor;
 
@@ -21,13 +21,13 @@ public:
     };
 
     const std::vector<Vertex2D> vectorArrowOutline = {
-        {  0.0f,   0.0f },    // 0: Ponta (PIVÔ DE EVENTO)
-        {  0.0f,  17.0f },    // 1: Aresta esquerda
-        {  4.0f,  13.0f },    // 2: Junção da cauda esquerda
-        {  7.0f,  19.5f },    // 3: Ponta inferior esquerda da cauda
-        {  9.5f,  18.5f },    // 4: Ponta inferior direita da cauda
-        {  6.5f,  12.0f },    // 5: Junção da cauda direita
-        { 12.0f,  12.0f },    // 6: Canto direito da asa
+        {  0.0f,   0.0f },    // 0: Tip (EVENT PIVOT)
+        {  0.0f,  17.0f },    // 1: Left edge
+        {  4.0f,  13.0f },    // 2: Left tail junction
+        {  7.0f,  19.5f },    // 3: Lower-left tail tip
+        {  9.5f,  18.5f },    // 4: Lower-right tail tip
+        {  6.5f,  12.0f },    // 5: Right tail junction
+        { 12.0f,  12.0f },    // 6: Right wing corner
     };
 
     static Vector2D rotatePoint(Vector2D p, float angle) {
@@ -46,7 +46,7 @@ public:
         } else {
             Vector2D dir = (to - from).normalized();
             Vector2D perp = {-dir.y * (width * 0.5f), dir.x * (width * 0.5f)};
-            
+
             SDL_Vertex verts[4];
             SDL_FColor col = {color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, color.a / 255.0f};
 
@@ -81,7 +81,7 @@ public:
     void drawCircle(SDL_Renderer* renderer, Vector2D center, float radius, SDL_Color color, bool fill = false) {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         const int segments = 20;
-        
+
         if (fill) {
             std::vector<SDL_Vertex> verts(segments + 1);
             std::vector<int> indices(segments * 3);
@@ -104,7 +104,7 @@ public:
             for (int i = 0; i < segments; ++i) {
                 float a1 = (i * 2.0f * (float)M_PI) / segments;
                 float a2 = ((i + 1) * 2.0f * (float)M_PI) / segments;
-                SDL_RenderLine(renderer, 
+                SDL_RenderLine(renderer,
                     center.x + std::cos(a1) * radius, center.y + std::sin(a1) * radius,
                     center.x + std::cos(a2) * radius, center.y + std::sin(a2) * radius);
             }
@@ -115,7 +115,7 @@ public:
         Vector2D pivot = physics.pivotPos;
         float angle = physics.angle;
 
-        // 1. Rastro Inercial Suave
+        // 1. Smooth inertial trail
         if (showTrail && !physics.trail.empty()) {
             for (const auto& tp : physics.trail) {
                 if (tp.alpha <= 0.05f) continue;
@@ -124,7 +124,7 @@ public:
             }
         }
 
-        // 2. Arco de Balanço Angular
+        // 2. Angular sway arc
         if (showAngleArc && std::abs(angle) > 0.015f) {
             float rArc = 36.0f * cursorScale;
             float startA = (float)(M_PI * 0.25f);
@@ -138,16 +138,16 @@ public:
                 float t2 = (float)(i + 1) / arcSegs;
                 float a1 = startA + t1 * (endA - startA);
                 float a2 = startA + t2 * (endA - startA);
-                SDL_RenderLine(renderer, 
+                SDL_RenderLine(renderer,
                     pivot.x + std::cos(a1) * rArc, pivot.y + std::sin(a1) * rArc,
                     pivot.x + std::cos(a2) * rArc, pivot.y + std::sin(a2) * rArc);
             }
         }
 
-        // 3. Renderização Principal do Cursor Físico
+        // 3. Render the main physics cursor
         drawCursorInstance(renderer, pivot, angle, 255, cursorScale);
 
-        // 4. Vetores Físicos
+        // 4. Physics vectors
         if (showPhysicsVectors) {
             if (physics.velocity.length() > 10.0f) {
                 drawArrowVector(renderer, pivot, physics.velocity, 0.08f, {46, 204, 113, 230});
@@ -157,7 +157,7 @@ public:
             }
         }
 
-        // 5. Ponto do Pivô Fixo no Primeiro Pixel (Hotspot de Evento)
+        // 5. Fixed pivot at the first pixel (event hotspot)
         if (showPivotPoint) {
             drawCircle(renderer, pivot, 2.5f, {255, 50, 50, 255}, true);
             drawCircle(renderer, pivot, 4.5f, {255, 255, 255, 220}, false);

@@ -22,7 +22,7 @@ public:
     static SystemCursorData loadSystemCursor(SDL_Renderer* renderer) {
         SystemCursorData result;
 
-        // 1. Obter tema e tamanho das variáveis de ambiente do sistema CachyOS / Hyprland
+        // 1. Read theme and size from the CachyOS / Hyprland environment
         const char* envTheme = std::getenv("HYPRCURSOR_THEME");
         if (!envTheme || envTheme[0] == '\0') envTheme = std::getenv("XCURSOR_THEME");
         if (!envTheme || envTheme[0] == '\0') envTheme = "Bibata-Modern-Ice";
@@ -42,13 +42,13 @@ public:
 
         XcursorImage* img = nullptr;
 
-        // 2. Tentar carregar via XcursorLibraryLoadImage
+        // 2. Try loading with XcursorLibraryLoadImage
         img = XcursorLibraryLoadImage("default", envTheme, size);
         if (!img) {
             img = XcursorLibraryLoadImage("left_ptr", envTheme, size);
         }
 
-        // 3. Se falhar, buscar caminhos diretos no disco
+        // 3. If that fails, try direct filesystem paths
         if (!img) {
             const char* home = std::getenv("HOME");
             std::vector<std::string> paths;
@@ -70,13 +70,13 @@ public:
             }
         }
 
-        // 4. Fallback para tema default do sistema se ainda não encontrou
+        // 4. Fall back to the system default theme if no image was found
         if (!img) {
             img = XcursorLibraryLoadImage("default", "default", size);
         }
 
         if (!img) {
-            std::cerr << "[SystemCursorLoader] Nao foi possivel carregar cursor do sistema para tema: " 
+            std::cerr << "[SystemCursorLoader] Could not load the system cursor for theme: "
                       << envTheme << std::endl;
             return result;
         }
@@ -86,7 +86,7 @@ public:
         result.xhot = (int)img->xhot;
         result.yhot = (int)img->yhot;
 
-        // 5. Criar textura SDL3 com o formato ARGB8888 nativo do Xcursor
+        // 5. Create an SDL3 texture using the native XCursor ARGB8888 format
         result.texture = SDL_CreateTexture(
             renderer,
             SDL_PIXELFORMAT_ARGB8888,
@@ -96,7 +96,7 @@ public:
         );
 
         if (!result.texture) {
-            std::cerr << "[SystemCursorLoader] Falha ao criar SDL_Texture para o cursor: " 
+            std::cerr << "[SystemCursorLoader] Failed to create an SDL_Texture for the cursor: "
                       << SDL_GetError() << std::endl;
             XcursorImageDestroy(img);
             return result;
@@ -104,7 +104,7 @@ public:
 
         SDL_SetTextureBlendMode(result.texture, SDL_BLENDMODE_BLEND);
 
-        // Upload dos pixels para a GPU
+        // Upload pixels to the GPU
         SDL_UpdateTexture(
             result.texture,
             nullptr,
@@ -115,9 +115,9 @@ public:
         XcursorImageDestroy(img);
 
         result.valid = true;
-        std::cout << "[SystemCursorLoader] Cursor do sistema carregado com sucesso!" << std::endl;
-        std::cout << "  Tema: " << result.themeName << " | Tamanho: " << result.width << "x" << result.height 
-                  << " | Pivo/Hotspot original: (" << result.xhot << ", " << result.yhot << ")" << std::endl;
+        std::cout << "[SystemCursorLoader] System cursor loaded successfully!" << std::endl;
+        std::cout << "  Theme: " << result.themeName << " | Size: " << result.width << "x" << result.height
+                  << " | Original pivot/hotspot: (" << result.xhot << ", " << result.yhot << ")" << std::endl;
 
         return result;
     }

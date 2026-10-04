@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Removendo PhysicsCursor..."
+echo "Removing PhysicsCursor..."
 
 pkill -f "physics_cursor" 2>/dev/null || true
 rm -f "$HOME/.local/bin/physics_cursor"
@@ -20,4 +20,4 @@ if command -v hyprctl >/dev/null 2>&1; then
     hyprctl reload >/dev/null 2>&1 || true
 fi
 
-echo "PhysicsCursor desinstalado com sucesso. O cursor retornou ao padrao."
+echo "PhysicsCursor uninstalled successfully. The standard cursor has been restored."

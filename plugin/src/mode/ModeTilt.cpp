@@ -33,7 +33,7 @@ SModeResult CModeTilt::update(Vector2D pos) {
         return SModeResult();
     }
 
-    // 1. Cinemática Linear com Filtro Exponencial
+    // 1. Linear kinematics with exponential filtering
     Vector2D instantVel = (pos - lastPos) / dt;
     lastPos = pos;
 
@@ -45,28 +45,28 @@ SModeResult CModeTilt::update(Vector2D pos) {
     double accelDecay = std::exp(-25.0 * dt);
     accel = accel * accelDecay + instantAccel * (1.0 - accelDecay);
 
-    // 2. Ângulo Alvo da Mola com Base na Velocidade e Inércia
+    // 2. Target spring angle based on velocity and inertia
     double speedX = velocity.x;
     double targetNorm = activation(function, limit, speedX);
     double targetAngle = targetNorm * (std::numbers::pi / (180.0 / full_tilt));
 
-    // Pulso inercial de aceleração (dá o recuo inicial e o overshoot ao frear)
+    // Inertial acceleration impulse (initial recoil and overshoot when braking)
     double inertialFactor = -(accel.x / (double)limit) * 0.20 * (std::numbers::pi / (180.0 / full_tilt));
     targetAngle += inertialFactor;
 
-    // 3. Oscilador Harmônico Elástico Subamortecido (Mola Física com Balanço Real)
-    // Frequência natural da mola (rad/s)
+    // 3. Underdamped elastic harmonic oscillator (physical spring with sway)
+    // Natural spring frequency (rad/s)
     double omega0 = 24.0;
 
-    // Fator de amortecimento zeta: 0.42 = subamortecido!
-    // Produz balanço elástico natural e orgânico, com overshoot perceptível ao parar o mouse
+    // Damping ratio zeta: 0.42 = underdamped
+    // Produces natural elastic sway with noticeable overshoot when the mouse stops
     double zeta = 0.42;
 
     double springAccel = (omega0 * omega0) * (targetAngle - angle);
     double dampingAccel = (2.0 * zeta * omega0) * angularVelocity;
     double totalAngularAccel = springAccel - dampingAccel;
 
-    // Sub-stepping numérico (Semi-Implicit Euler) para estabilidade
+    // Numerical substeps (semi-implicit Euler) for stability
     const int subSteps = 4;
     double subDt = dt / subSteps;
     for (int i = 0; i < subSteps; ++i) {
@@ -74,11 +74,11 @@ SModeResult CModeTilt::update(Vector2D pos) {
         angle += angularVelocity * subDt;
     }
 
-    // Limite máximo de segurança
+    // Maximum safety limit
     double maxAngle = full_tilt * (std::numbers::pi / 180.0) * 1.35;
     angle = std::clamp(angle, -maxAngle, maxAngle);
 
-    // Ao atingir repouso quase absoluto, zera suavemente para evitar custo de GPU
+    // Snap gently to zero near rest to avoid unnecessary GPU work
     if (std::abs(speedX) < 1.0 && std::abs(angle) < 0.0005 && std::abs(angularVelocity) < 0.005) {
         angle = 0.0;
         angularVelocity = 0.0;

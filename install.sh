@@ -16,14 +16,14 @@ PLUGIN_DIR="$HOME/.local/share/hyprland/plugins"
 HYPR_CONFIG_DIR="$HOME/.config/hypr"
 
 echo "========================================================"
-echo "    Instalador do PhysicsCursor (Hyprland / CachyOS)    "
+echo "    PhysicsCursor Installer (Hyprland / CachyOS)    "
 echo "========================================================"
 
 mkdir -p "$BIN_DIR"
 mkdir -p "$PLUGIN_DIR"
 
 # Build against the user's Hyprland headers; install dependencies automatically.
-echo "[1/4] Compilando e testando para esta versao do Hyprland..."
+echo "[1/4] Building and testing for this Hyprland version..."
 bash "$DIR/build.sh"
 cp "$DIR/bin/physics_cursor" "$BIN_DIR/physics_cursor.new"
 mv "$BIN_DIR/physics_cursor.new" "$BIN_DIR/physics_cursor"
@@ -32,8 +32,8 @@ mv "$PLUGIN_DIR/dynamic-cursors.so.new" "$PLUGIN_DIR/dynamic-cursors.so"
 
 chmod +x "$BIN_DIR/physics_cursor" 2>/dev/null || true
 
-# 2. Configurar integracao com o Hyprland
-echo "[2/4] Configurando integracao com o Hyprland..."
+# 2. Configure Hyprland integration
+echo "[2/4] Configuring Hyprland integration..."
 
 if [ -f "$HYPR_CONFIG_DIR/hyprland.lua" ]; then
     mkdir -p "$HYPR_CONFIG_DIR/config"
@@ -97,21 +97,21 @@ EOF
 fi
 
 if ! $ACTIVATE; then
-    echo "[PhysicsCursor] Binarios atualizados. Configuracao existente preservada."
-    echo "[PhysicsCursor] Plugin e daemon nao foram carregados/reiniciados nesta sessao."
-    echo "[PhysicsCursor] Ativacao manual nesta sessao: bash install.sh --activate"
+    echo "[PhysicsCursor] Binaries updated. Existing configuration preserved."
+    echo "[PhysicsCursor] The plugin and daemon were not loaded or restarted in this session."
+    echo "[PhysicsCursor] Manual activation in this session: bash install.sh --activate"
     exit 0
 fi
 
-# 3. Iniciar o daemon de física
-echo "[3/4] Iniciando daemon em segundo plano..."
+# 3. Start the physics daemon
+echo "[3/4] Starting the background daemon..."
 pkill -f "physics_cursor --daemon" 2>/dev/null || true
 setsid "$BIN_DIR/physics_cursor" --daemon </dev/null >/tmp/physics_cursor_daemon.log 2>&1 &
 
 # Explicit session activation does not reload the entire compositor config.
-echo "[4/4] Ativando plugin nesta sessao..."
+echo "[4/4] Activating the plugin in this session..."
 if ! command -v hyprctl >/dev/null 2>&1 || ! hyprctl plugin list >/dev/null 2>&1; then
-    echo "[PhysicsCursor] Sem acesso ao Hyprland; plugin permanece desativado." >&2
+    echo "[PhysicsCursor] Cannot access Hyprland; the plugin remains disabled." >&2
     exit 1
 fi
 hyprctl plugin unload "$PLUGIN_DIR/dynamic-cursors.so" >/dev/null 2>&1 || true
@@ -119,9 +119,9 @@ hyprctl plugin load "$PLUGIN_DIR/dynamic-cursors.so"
 
 echo ""
 echo "========================================================"
-echo "    PhysicsCursor instalado e ativado com sucesso!      "
+echo "    PhysicsCursor installed and activated successfully!      "
 echo "========================================================"
-echo "O cursor do seu sistema agora responde a fisica e inercia."
-echo "- Para abrir o painel interativo: physics_cursor"
-echo "- Para desinstalar quando quiser: bash uninstall.sh"
+echo "Your system cursor now responds to physics and inertia."
+echo "- Open the interactive playground: physics_cursor"
+echo "- Uninstall: bash uninstall.sh"
 echo "========================================================"

@@ -14,17 +14,17 @@ struct alignas(64) SharedCursorBridge {
     uint32_t magic{PHYSICS_BRIDGE_MAGIC};
     uint32_t version{1};
 
-    // Posição atual do mouse (atualizada pelo Hyprland ou Daemon)
+    // Current mouse position (updated by Hyprland or the daemon)
     std::atomic<float> mouseX{0.0f};
     std::atomic<float> mouseY{0.0f};
 
-    // Ângulo de rotação calculado pelo PhysicsCursor Daemon (radianos)
+    // Rotation angle computed by the PhysicsCursor daemon (radians)
     std::atomic<float> rotationAngle{0.0f};
 
-    // Heartbeat em milissegundos para detecção de queda
+    // Heartbeat in milliseconds for failure detection
     std::atomic<uint64_t> lastHeartbeatMs{0};
 
-    // Flag indicando se o daemon de física está rodando
+    // Flag indicating whether the physics daemon is running
     std::atomic<bool> isDaemonActive{false};
 };
 

@@ -12,8 +12,8 @@ sleep 0.2
 setsid /lib64/ld-linux-x86-64.so.2 ./physics_cursor --daemon </dev/null >/tmp/physics_cursor_daemon.log 2>&1 &
 sleep 0.5
 if pgrep -f '(^|/)physics_cursor --daemon$' >/dev/null; then
-    echo '[PhysicsCursor] Daemon ativo com os parametros compilados.'
+    echo '[PhysicsCursor] Daemon running with the compiled parameters.'
 else
-    echo '[PhysicsCursor] Falha ao iniciar. Veja /tmp/physics_cursor_daemon.log' >&2
+    echo '[PhysicsCursor] Failed to start. See /tmp/physics_cursor_daemon.log' >&2
     exit 1
 fi

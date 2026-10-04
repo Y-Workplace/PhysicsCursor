@@ -1,10 +1,10 @@
 # PhysicsCursor
 
-Simulação em C++ e plugin do Hyprland para inclinar o cursor com mola,
-amortecimento e inércia. O daemon calcula a física a 500 Hz e envia o ângulo
-por memória compartilhada. A ponta de clique continua na posição do mouse.
+A C++ simulation and Hyprland plugin that tilt the cursor using a spring,
+damping, and inertia. The daemon computes physics at 500 Hz and publishes the
+angle through shared memory. The click hotspot stays at the mouse position.
 
-## Instalar no CachyOS / Arch Linux
+## Install on CachyOS / Arch Linux
 
 ```bash
 git clone https://github.com/Y-Workplace/PhysicsCursor.git
@@ -12,80 +12,82 @@ cd PhysicsCursor
 bash install.sh
 ```
 
-Por padrão o instalador **atualiza os arquivos sem carregar o plugin**, reiniciar
-o daemon ou recarregar a configuração do compositor. Ele preserva inclusive
-o bloqueio `ENABLED = false` que você colocar em `cursor_bridge.lua`.
+By default, the installer **updates files without loading the plugin**, restarting
+the daemon, or reloading the compositor configuration. It also preserves an
+`ENABLED = false` startup guard in `cursor_bridge.lua`.
 
-O instalador busca as dependências ausentes com `pacman` (pode pedir a senha
-do `sudo`), compila, executa os testes e instala os binários. Você não precisa
-baixar bibliotecas ou procurar cabeçalhos manualmente. A primeira instalação
-precisa de internet se faltar algum pacote.
+The installer uses `pacman` to install missing dependencies (it may request your
+`sudo` password), builds the project, runs the tests, and installs the binaries.
+You do not need to download libraries or locate development headers manually.
+The first installation requires internet access if any packages are missing.
 
-O repositório inclui os fontes do simulador e do plugin, scripts, parâmetros
-compiláveis e testes. As bibliotecas do sistema são instaladas pelo gerenciador
-de pacotes. O plugin é recompilado contra os cabeçalhos do Hyprland instalado,
-pois sua ABI depende da versão do compositor. Após atualizar o Hyprland,
-execute novamente `bash install.sh`.
+This repository includes the simulator and plugin sources, scripts, compiled
+parameter defaults, and tests. System libraries are installed through the package
+manager. The plugin is rebuilt against the installed Hyprland headers because its
+ABI depends on the compositor build. Run `bash install.sh` again after updating
+Hyprland.
 
-Os executáveis são instalados em `~/.local/bin/physics_cursor` e
-`~/.local/share/hyprland/plugins/dynamic-cursors.so`. O instalador configura
-`hyprland.lua` ou `hyprland.conf` sem ativar o plugin automaticamente. Para carregar somente nesta sessão, use
-`bash install.sh --activate`. Esse comando não altera o bloqueio de carregamento
-no login nem executa uma recarga global da configuração.
+The binaries are installed at `~/.local/bin/physics_cursor` and
+`~/.local/share/hyprland/plugins/dynamic-cursors.so`. The installer configures
+`hyprland.lua` or `hyprland.conf` without automatically activating the plugin.
+To load it in the current session, run `bash install.sh --activate`. This does
+not change the login startup guard or reload the entire compositor configuration.
 
-## Escolher parâmetros, compilar e testar na simulação
+## Adjust parameters, build, and test in the playground
 
 ```bash
 bash run.sh
-# Ou, em overlay transparente:
+# Or use a transparent overlay:
 bash run.sh --overlay
 ```
 
-Ajuste os parâmetros com as teclas abaixo e pressione **F9**:
+Adjust the parameters using the controls below, then press **F9**:
 
-1. Os valores atuais são gravados em `src/PhysicsDefaults.hpp`.
-2. O simulador e o daemon são recompilados com esses valores.
-3. Os testes verificam estabilidade durante sacudidas rápidas, limite angular,
-   retorno ao repouso, cadência e exportação dos parâmetros.
-4. Se tudo passar, o daemon é reiniciado com a configuração compilada.
-   Se houver uma instalação em `~/.local/bin`, ela também é atualizada.
+1. The current values are saved to `src/PhysicsDefaults.hpp`.
+2. The simulator and daemon are rebuilt with those values.
+3. Tests check stability during rapid shaking, the angular limit, return to rest,
+   update cadence, and parameter export.
+4. If all checks pass, the daemon restarts with the compiled configuration.
+   An existing installation in `~/.local/bin` is updated as well.
 
-A janela continua aberta durante a compilação e mostra o resultado no HUD.
-O log fica em `build/playground-build.log`. Execute a simulação a partir do
-checkout do projeto para editar e compilar seus fontes. Instale primeiro com
-`bash install.sh` para preparar o plugin e as ferramentas de compilação.
-O daemon anterior é preservado se a compilação ou os testes falharem.
+The window stays open during compilation and displays the result in the HUD.
+The log is saved to `build/playground-build.log`. Run the playground from the
+project checkout to edit and compile its sources. Run `bash install.sh` first
+to prepare the plugin and build tools. The previous daemon is preserved if
+compilation or tests fail.
 
-| Tecla | Função |
+The interface and command-line messages are always in English, regardless of
+system locale.
+
+| Key | Action |
 |---|---|
-| 1 / 2 | Diminuir / aumentar arrasto |
-| 3 / 4 | Diminuir / aumentar rigidez da mola |
-| 5 / 6 | Diminuir / aumentar amortecimento |
-| 7 / 8 | Diminuir / aumentar influência inercial |
-| F9 | Salvar valores, compilar, testar e aplicar ao daemon |
-| R | Restaurar os valores compilados desta janela |
-| C | Alternar cursor do sistema / vetorial |
-| L | Alternar português / inglês |
-| V / T / P | Vetores / rastro / pivô |
-| + / - | Aumentar / diminuir cursor na simulação |
-| Espaço | Aplicar impulso angular |
-| H | Mostrar / ocultar HUD |
-| F11 / O | Alternar janela / overlay |
-| Esc / Q | Fechar a janela, preservando o daemon |
+| 1 / 2 | Decrease / increase drag |
+| 3 / 4 | Decrease / increase spring stiffness |
+| 5 / 6 | Decrease / increase damping |
+| 7 / 8 | Decrease / increase inertial influence |
+| F9 | Save parameters, build, test, and apply to the daemon |
+| R | Restore this window's compiled defaults |
+| C | Toggle the system / vector cursor |
+| V / T / P | Toggle vectors / trail / pivot |
+| + / - | Increase / decrease the playground cursor size |
+| Space | Apply an angular impulse |
+| H | Show / hide the HUD |
+| F11 / O | Toggle window / overlay mode |
+| Esc / Q | Close the window, preserving the daemon |
 
-Valores iniciais: massa `1`, mola `155`, amortecimento `4`, arrasto `0.00360`,
-inércia `0.00005`, deflexão máxima `45°`. O mesmo arquivo de parâmetros é
-usado pelo simulador e pelo daemon.
+Initial values: mass `1`, spring `155`, damping `4`, drag `0.00360`, inertia
+`0.00005`, and maximum deflection `45°`. The simulator and daemon use the same
+parameter file.
 
-## Cursor ampliado ao sacudir
+## Enlarge the cursor by shaking
 
-Sacudir rapidamente aumenta o cursor e mantém sua rotação física. O plugin
-preserva a física em modo `tilt`, mesmo com `shake:effects = false` em uma
-configuração antiga, e preserva o pivô da textura ampliada,
-inclusive ao usar uma imagem de maior resolução do tema. O cursor ampliado
-usa renderização por software, com uma região de desenho que inclui sua rotação.
+Rapid shaking enlarges the cursor while preserving its physical rotation. The
+plugin preserves physics in `tilt` mode even when an older configuration sets
+`shake:effects = false`. It also preserves the enlarged texture's pivot,
+including when using a higher-resolution theme image. The enlarged cursor uses
+software rendering with a damage region that includes its rotation.
 
-Se sua configuração antiga desabilitar os efeitos, habilite-os:
+If an older configuration disables effects, enable them:
 
 ```ini
 plugin:dynamic-cursors {
@@ -96,45 +98,46 @@ plugin:dynamic-cursors {
 }
 ```
 
-Em Lua, no bloco `plugin.dynamic_cursors`:
+In Lua, inside the `plugin.dynamic_cursors` block:
 
 ```lua
 shake = { enabled = true, effects = true },
 ```
 
-## Transição entre formatos de cursor
+## Cursor shape transitions
 
-Ao trocar entre formatos do tema (flecha, mão de link, texto, resize),
-o anterior desaparece encolhendo e girando 15°, enquanto o novo aparece com
-fade e uma curva elástica equivalente a `cubic-bezier(.34, 1.56, .64, 1)`.
-A transição fica **desativada por padrão** após a correção de inicialização.
-Para optar por ela, configure `transition:enabled = true` (ou `enabled = true`
-no bloco Lua `transition`). A duração padrão é 250 ms; a opacidade termina em 200 ms. Ao terminar,
-o cursor volta ao tamanho nativo do tema. A física e a ampliação por sacudida
-continuam ativas, e ambas as imagens giram em torno da ponta de clique real.
+When switching between theme shapes (arrow, link hand, text, or resize), the
+previous cursor shrinks and rotates 15° while fading out. The new cursor fades
+in with an elastic curve equivalent to `cubic-bezier(.34, 1.56, .64, 1)`.
+Transitions are **disabled by default**. Enable them with
+`transition:enabled = true`, or `enabled = true` in the Lua `transition` block.
+The default duration is 250 ms; the opacity animation finishes after 200 ms.
+Afterward, the cursor returns to its native theme size. Physics and shake
+magnification remain active, and both images rotate around the actual click
+hotspot.
 
-Durante a transição o plugin usa renderização por software; ao terminar,
-libera esse modo quando a ampliação ou outro recurso não o exigir. Trocas
-rápidas preservam as imagens ainda visíveis com um limite de quatro imagens
-anteriores. Cursores enviados pelo aplicativo em superfícies Wayland também
-participam, inclusive por XWayland. O plugin identifica as imagens do tema
-XCursor carregado pelo Hyprland e agrupa os quadros de um cursor animado,
-para que um spinner não reinicie a transição a cada quadro. A imagem anterior
-é copiada antes da troca, preservando seu conteúdo quando a superfície é reutilizada.
+During a transition, the plugin uses software rendering. Afterward, it releases
+that mode unless magnification or another feature still requires it. Rapid
+switches retain the images that are still visible, with a limit of four outgoing
+images. App-provided Wayland cursor surfaces also participate, including through
+XWayland. The plugin identifies images from the XCursor theme loaded by Hyprland
+and groups the frames of animated cursors so a spinner does not restart the
+transition every frame. The previous image is copied before switching, preserving
+its content when the surface is reused.
 
-Cursores ARGB em memória compartilhada de até 512 × 512 pixels são suportados.
-Para imagens personalizadas que não correspondem ao tema carregado, uma troca
-na mesma superfície só inicia a transição se tamanho ou hotspot mudarem;
-o protocolo não informa se outros commits são novos formatos ou quadros de animação.
-Imagens fornecidas apenas pela GPU continuam usando a física sem transição.
+Shared-memory ARGB cursors up to 512 × 512 pixels are supported. For custom
+images that do not match the loaded theme, changes on the same surface only
+start a transition if the size or hotspot changes: the protocol does not identify
+whether other commits are new shapes or animation frames. GPU-only images
+continue to use physics without shape transitions.
 
-Para desativar, no bloco `plugin.dynamic_cursors` em Lua:
+To disable transitions, inside the Lua `plugin.dynamic_cursors` block:
 
 ```lua
 transition = { enabled = false, duration = 250 },
 ```
 
-Ou em `hyprland.conf`:
+Or in `hyprland.conf`:
 
 ```ini
 plugin:dynamic-cursors {
@@ -143,19 +146,19 @@ plugin:dynamic-cursors {
 }
 ```
 
-A duração aceita valores entre 50 e 1000 ms. Desativar a transição mantém
-a física do cursor e o recurso de ampliação por sacudida.
+The supported duration range is 50–1000 ms. Disabling transitions preserves
+cursor physics and shake magnification.
 
-## Compilar sem instalar
+## Build without installing
 
 ```bash
-bash build.sh               # Dependências, simulador, testes e plugin
-bash build.sh --daemon-only # Apenas simulador / daemon e testes
-make test                  # Testes sem SDL ou sessão gráfica
+bash build.sh               # Dependencies, simulator, tests, and plugin
+bash build.sh --daemon-only # Simulator / daemon and tests only
+make test                   # Tests without SDL or a graphical session
 ```
 
-Use `JOBS=4 bash build.sh` para escolher a quantidade de compilações paralelas
-(o padrão é 2). O caminho com CMake também inclui os testes:
+Use `JOBS=4 bash build.sh` to select the number of parallel compilation jobs
+(the default is 2). The CMake workflow also includes the tests:
 
 ```bash
 bash scripts/bootstrap.sh --daemon-only
@@ -164,7 +167,7 @@ cmake --build build/cmake -j2
 ctest --test-dir build/cmake --output-on-failure
 ```
 
-## Controlar o daemon
+## Control the daemon
 
 ```bash
 bash start_daemon.sh
@@ -172,52 +175,53 @@ bash stop_daemon.sh
 pgrep -fa 'physics_cursor --daemon'
 ```
 
-Ao encerrar o daemon, o plugin usa sua física local como alternativa em modo
-`tilt`. Abrir e fechar a simulação não encerra o daemon. As alterações visuais
-não modificam os eventos de clique ou o movimento enviado aos aplicativos.
+When the daemon stops, the plugin falls back to its local physics in `tilt` mode.
+Opening or closing the playground does not stop the daemon. Visual effects do
+not change click events or the pointer movement delivered to applications.
 
-Os testes são executados pelo carregador ELF, assim como o simulador. Isso
-permite executar o fluxo a partir de volumes como `/mnt/archives` que não
-preservam a permissão de execução dos binários compilados.
+Tests and the simulator run through the ELF loader. This supports running from
+volumes such as `/mnt/archives` that do not preserve executable permissions on
+compiled binaries.
 
-## Verificar o ciclo de vida do plugin sem arriscar o login
+## Test the plugin lifecycle in an isolated compositor
 
-O plugin não solicita recarga global da configuração durante `PLUGIN_INIT`.
-Sua inicialização visual é adiada até o loop de eventos, e o descarregamento
-cancela tarefas pendentes, remove hooks e destrói callbacks junto de seus donos.
+The plugin does not request a global configuration reload during `PLUGIN_INIT`.
+Visual initialization is deferred until the event loop. Unloading cancels pending
+tasks, removes hooks, and destroys callbacks together with their owners.
 
-Além dos testes numéricos, este teste opcional abre um compositor aninhado com
-configuração, cache, runtime e socket IPC temporários. Ele testa o carregamento
-na configuração inicial, três ciclos de reload/unload/load e o encerramento:
+In addition to the numerical tests, this optional test starts a nested compositor
+with a temporary configuration, cache, runtime directory, and IPC socket. It tests
+loading from the initial configuration, three reload/unload/load cycles, and
+shutdown:
 
 ```bash
 python3 tests/plugin_lifecycle.py
 ```
 
-Execute a partir de uma sessão Wayland já aberta. O teste não carrega o plugin
-na sessão principal, não altera sua configuração e não atualiza o ambiente do
-systemd. Os logs temporários são informados ao terminar.
+Run it from an existing Wayland session. The test does not load the plugin into
+the main session, change its configuration, or update the systemd environment.
+Temporary log paths are printed when it finishes.
 
-Para exercitar também a transição real entre flecha, mão e texto:
+To also exercise actual arrow, hand, and text transitions:
 
 ```bash
 python3 tests/plugin_lifecycle.py --transitions
 ```
 
-Este modo compila uma cópia temporária do plugin e um daemon com memória
-compartilhada exclusiva. Verifica 20 reversões rápidas, desativação durante a
-animação, ampliação e liberação das imagens e travas de renderização ao terminar.
-O plugin auxiliar de inspeção existe somente no sandbox. A sessão principal e
-seu daemon continuam com suas configurações atuais. Se `grim` estiver instalado,
-o teste salva uma captura do cursor ampliado junto dos logs temporários.
+This mode builds a temporary plugin copy and a daemon with private shared memory.
+It checks 20 rapid reversals, disabling transitions during animation,
+magnification, and the release of images and rendering locks afterward. The
+inspection plugin exists only inside the test environment. The main session and
+its daemon keep their current configuration. If `grim` is installed, the test
+saves a screenshot of the magnified cursor alongside the temporary logs.
 
-Para testar também superfícies de aplicativos Wayland e X11/XWayland:
+To also test Wayland and X11/XWayland app cursor surfaces:
 
 ```bash
 python3 tests/plugin_lifecycle.py --surfaces
 ```
 
-Este modo usa o tema Bibata-Modern-Ice instalado em `~/.local/share/icons`,
-um cliente SDL controlado e o DISPLAY da instância aninhada. Verifica a cópia
-da imagem anterior, trocas rápidas, quadros de cursor animado, desativação e
-ocultação do cursor, sem carregar o plugin na sessão principal.
+This mode uses Bibata-Modern-Ice installed in `~/.local/share/icons`, a controlled
+SDL client, and the nested compositor's DISPLAY. It checks the previous image
+snapshot, rapid changes, animated cursor frames, disabling transitions, and
+hiding the cursor without loading the plugin into the main session.
